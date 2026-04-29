@@ -199,8 +199,8 @@
               'font-family': 'monospace',
               'width': 72,
               'height': 72,
-              'text-wrap': 'ellipsis',
-              'text-max-width': '120px',
+              'text-wrap': 'wrap',
+              'text-max-width': '160px',
             }
           },
           {
@@ -259,11 +259,14 @@
       });
     }
 
+    let lastPeerCount = 0;
+
     function updateGraph(peers) {
       if (!cy) return;
 
       const currentIds = new Set(peers.map(p => p.id));
       const graphIds = new Set(cy.nodes().map(n => n.id()));
+      const countChanged = peers.length !== lastPeerCount;
 
       cy.nodes().forEach(n => {
         if (!currentIds.has(n.id())) cy.remove(n);
@@ -288,17 +291,14 @@
         }
       });
 
-      // Altura dinámica: mínimo 300px, crece con más peers
-      const graphH = Math.max(300, Math.ceil(peers.length / 4) * 220);
-      document.getElementById('graph').style.height = graphH + 'px';
-
-      const layoutName = peers.length <= 1 ? 'grid' : 'circle';
-      cy.layout({
-        name: layoutName,
-        padding: 80,
-        animate: false,
-        spacingFactor: 1.6,
-      }).run();
+      // Solo re-layoutear si cambió la cantidad de peers
+      if (countChanged) {
+        lastPeerCount = peers.length;
+        const graphH = Math.max(300, Math.ceil(peers.length / 4) * 220);
+        document.getElementById('graph').style.height = graphH + 'px';
+        const layoutName = peers.length <= 1 ? 'grid' : 'circle';
+        cy.layout({ name: layoutName, padding: 80, animate: false, spacingFactor: 1.6 }).run();
+      }
     }
 
     function statusBadge(status) {
