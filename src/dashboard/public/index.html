@@ -88,6 +88,19 @@
     .copy-btn:hover { opacity: 1; }
     #no-peers { display: none; }
     .section-label { font-size: 10px; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 8px; }
+
+    .graph-feed-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto;
+    }
+    .graph-col, .feed-col { display: flex; flex-direction: column; }
+    .feed-col #activity-feed { flex: 1; min-height: 0; }
+    #graph { width: 100%; }
+
+    @media (max-width: 768px) {
+      .graph-feed-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -127,17 +140,17 @@
     </div>
 
     <!-- Graph + Feed -->
-    <div class="grid gap-4 mb-5" style="grid-template-columns: 2fr 1fr">
-      <div>
+    <div class="graph-feed-grid gap-4 mb-5">
+      <div class="graph-col">
         <div class="section-label">RED DE AGENTES</div>
-        <div id="graph"></div>
+        <div id="graph" style="height:340px"></div>
         <div id="no-peers" class="text-center py-8" style="color: var(--text-muted)">
           Sin agentes activos · Abre un agente en otro directorio
         </div>
       </div>
-      <div>
+      <div class="feed-col">
         <div class="section-label">ACTIVIDAD RECIENTE</div>
-        <div id="activity-feed" class="overflow-y-auto" style="height:340px; background:var(--bg-card); border-radius:10px; border:1px solid var(--border); padding:10px;"></div>
+        <div id="activity-feed" class="overflow-y-auto" style="background:var(--bg-card); border-radius:10px; border:1px solid var(--border); padding:10px;"></div>
       </div>
     </div>
 
@@ -294,8 +307,9 @@
       // Solo re-layoutear si cambió la cantidad de peers
       if (countChanged) {
         lastPeerCount = peers.length;
-        const graphH = Math.max(300, Math.ceil(peers.length / 4) * 220);
+        const graphH = Math.max(340, Math.ceil(peers.length / 4) * 220);
         document.getElementById('graph').style.height = graphH + 'px';
+        document.getElementById('activity-feed').style.height = graphH + 'px';
         const layoutName = peers.length <= 1 ? 'grid' : 'circle';
         cy.layout({ name: layoutName, padding: 80, animate: false, spacingFactor: 1.6 }).run();
       }
