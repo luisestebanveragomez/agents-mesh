@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Peers</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.29.2/cytoscape.min.js"></script>
+  <style>
+    :root {
+      --status-working:  #10b981;
+      --status-waiting:  #f59e0b;
+      --status-idle:     #6b7280;
+      --status-dead:     #ef4444;
+      --bg-main:         #0f172a;
+      --bg-card:         #1e293b;
+      --bg-hover:        #334155;
+      --text-primary:    #f1f5f9;
+      --text-secondary:  #94a3b8;
+      --text-muted:      #64748b;
+    }
+    body { background: var(--bg-main); color: var(--text-primary); font-family: 'SF Mono', 'Fira Code', monospace; margin: 0; }
+    #graph { width: 100%; height: 300px; background: var(--bg-card); border-radius: 8px; }
+    .peer-card { background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid #334155; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .status-working { background: var(--status-working); }
+    .status-waiting { background: var(--status-waiting); animation: pulse 1s infinite; }
+    .status-idle { background: var(--status-idle); }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .feed-line { font-size: 11px; padding: 3px 8px; border-left: 2px solid #334155; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .feed-line.message { border-color: #3b82f6; }
+    .feed-line.join { border-color: var(--status-working); }
+    .feed-line.leave { border-color: var(--status-dead); }
+    .copy-btn { cursor: pointer; opacity: 0.6; font-size: 10px; padding: 2px 6px; border: 1px solid #334155; border-radius: 4px; }
+    .copy-btn:hover { opacity: 1; }
+    #no-peers { display: none; }
+  </style>
+</head>
+<body>
+  <div class="min-h-screen p-4">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h1 class="text-xl font-bold tracking-widest" style="color: #60a5fa">CLAUDE-PEERS</h1>
+        <div class="text-xs" style="color: var(--text-muted)">Dashboard · <span id="last-update">actualizando...</span></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full bg-green-500" style="animation: pulse 2s infinite"></div>
+        <span class="text-xs" style="color: var(--text-muted)">2s</span>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div id="stats-bar" class="grid grid-cols-3 gap-3 mb-4">
+      <div class="peer-card text-center">
+        <div id="stat-total" class="text-2xl font-bold text-green-400">0</div>
+        <div class="text-xs" style="color: var(--text-muted)">activos</div>
+      </div>
+      <div class="peer-card text-center">
+        <div id="stat-working" class="text-2xl font-bold text-blue-400">0</div>
+        <div class="text-xs" style="color: var(--text-muted)">trabajando</div>
+      </div>
+      <div class="peer-card text-center">
+        <div id="stat-waiting" class="text-2xl font-bold text-yellow-400">0</div>
+        <div class="text-xs" style="color: var(--text-muted)">esperando</div>
+      </div>
+    </div>
+
+    <!-- Main grid: grafo + feed -->
+    <div class="grid grid-cols-3 gap-4 mb-4">
+      <!-- Grafo -->
+      <div class="col-span-2">
+        <div class="text-xs mb-2" style="color: var(--text-muted)">RED DE PEERS</div>
+        <div id="graph"></div>
+        <div id="no-peers" class="text-center py-8" style="color: var(--text-muted)">
+          Sin peers activos · Abre Claude Code en otro directorio
+        </div>
+      </div>
+
+      <!-- Activity feed -->
+      <div>
+        <div class="text-xs mb-2" style="color: var(--text-muted)">ACTIVIDAD RECIENTE</div>
+        <div id="activity-feed" class="overflow-y-auto space-y-1" style="height: 300px; background: var(--bg-card); border-radius: 8px; padding: 8px;"></div>
+      </div>
+    </div>
+
+    <!-- Peer cards -->
+    <div class="text-xs mb-2" style="color: var(--text-muted)">PEERS</div>
+    <div id="peer-cards" class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))"></div>
+  </div>
+
+  <script>
+    const AGENT_ICONS = {
+      'claude-code':  '🤖',
+      'gemini-cli':   '✨',
+      'opencode':     '⚡',
+      'copilot':      '🐙',
+      'codex':        '🔥',
+      'unknown':      '❓',
+    };
+
+    const AGENT_COLORS = {
+      'claude-code':  '#f97316',
+      'gemini-cli':   '#3b82f6',
+      'opencode':     '#8b5cf6',
+      'copilot':      '#6b7280',
+      'codex':        '#10b981',
+      'unknown':      '#64748b',
+    };
+
+    let cy = null;
+    let lastPeers = [];
+
+    function initGraph() {
+      cy = cytoscape({
+        container: document.getElementById('graph'),
+        style: [
+          {
+            selector: 'node',
+            style: {
+              'background-color': 'data(color)',
+              'label': 'data(label)',
+              'color': '#f1f5f9',
+              'text-valign': 'bottom',
+              'text-halign': 'center',
+              'font-size': '10px',
+              'font-family': 'monospace',
+              'width': 40,
+              'height': 40,
+              'border-width': 2,
+              'border-color': '#334155',
+              'text-margin-y': 4,
+            }
+          },
+          {
+            selector: 'node[status = "working"]',
+            style: { 'border-color': '#10b981' }
+          },
+          {
+            selector: 'node[status = "waiting"]',
+            style: { 'border-color': '#f59e0b' }
+          },
+          {
+            selector: 'edge',
+            style: {
+              'width': 2,
+              'line-color': '#3b82f6',
+              'target-arrow-color': '#3b82f6',
+              'target-arrow-shape': 'triangle',
+              'curve-style': 'bezier',
+              'opacity': 0.7,
+            }
+          }
+        ],
+        layout: { name: 'grid' },
+        userZoomingEnabled: true,
+        userPanningEnabled: true,
+      });
+    }
+
+    function updateGraph(peers) {
+      if (!cy) return;
+
+      const currentIds = new Set(peers.map(p => p.id));
+      const graphIds = new Set(cy.nodes().map(n => n.id()));
+
+      // Eliminar nodos que ya no están
+      cy.nodes().forEach(n => {
+        if (!currentIds.has(n.id())) cy.remove(n);
+      });
+
+      // Agregar/actualizar nodos
+      for (const peer of peers) {
+        const icon = AGENT_ICONS[peer.agent] ?? '❓';
+        const label = `${icon} ${peer.role}`;
+        if (graphIds.has(peer.id)) {
+          cy.$(`#${peer.id}`).data({ label, status: peer.status, color: AGENT_COLORS[peer.agent] ?? '#64748b' });
+        } else {
+          cy.add({ data: { id: peer.id, label, status: peer.status, color: AGENT_COLORS[peer.agent] ?? '#64748b' } });
+        }
+      }
+
+      cy.layout({ name: 'grid', rows: 2 }).run();
+    }
+
+    function renderPeerCards(peers) {
+      const container = document.getElementById('peer-cards');
+      if (peers.length === 0) {
+        container.innerHTML = '';
+        document.getElementById('no-peers').style.display = 'block';
+        return;
+      }
+      document.getElementById('no-peers').style.display = 'none';
+
+      container.innerHTML = peers.map(peer => {
+        const icon = AGENT_ICONS[peer.agent] ?? '❓';
+        const color = AGENT_COLORS[peer.agent] ?? '#64748b';
+        const statusClass = `status-${peer.status}`;
+        return `
+          <div class="peer-card">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span style="font-size: 18px">${icon}</span>
+                <span class="font-semibold text-sm">${peer.role}</span>
+              </div>
+              <span class="status-dot ${statusClass}"></span>
+            </div>
+            <div class="text-xs space-y-1" style="color: var(--text-secondary)">
+              <div>📁 ${peer.path}</div>
+              <div>🤖 ${peer.agent} ${peer.agent_version}</div>
+              ${peer.current_task ? `<div style="color: var(--text-primary)">💬 ${peer.current_task}</div>` : ''}
+              <div class="flex items-center gap-2 mt-2">
+                <span style="color: var(--text-muted); font-size: 10px">${peer.id}</span>
+                <button class="copy-btn" onclick="navigator.clipboard.writeText('${peer.id}')">📋</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderActivity(lines) {
+      const feed = document.getElementById('activity-feed');
+      feed.innerHTML = lines.slice(0, 30).map(line => {
+        const parts = line.split('|');
+        const type = parts[1] ?? '';
+        let cssClass = 'feed-line';
+        if (type === 'message') cssClass += ' message';
+        else if (type === 'peer_join') cssClass += ' join';
+        else if (type === 'peer_leave' || type === 'peer_timeout') cssClass += ' leave';
+
+        const time = parts[0] ? new Date(parts[0]).toLocaleTimeString() : '';
+        const rest = parts.slice(1).join(' · ');
+        return `<div class="${cssClass}"><span style="color: var(--text-muted)">${time}</span> ${rest}</div>`;
+      }).join('');
+    }
+
+    function updateStats(data) {
+      document.getElementById('stat-total').textContent = data.total ?? 0;
+      document.getElementById('stat-working').textContent = data.working ?? 0;
+      document.getElementById('stat-waiting').textContent = data.waiting ?? 0;
+      document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+    }
+
+    async function fetchActivity() {
+      try {
+        const res = await fetch('/api/activity?limit=30');
+        const lines = await res.json();
+        renderActivity(lines);
+      } catch {}
+    }
+
+    // SSE para updates de peers
+    function connectSSE() {
+      const es = new EventSource('/api/stream');
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          updateStats(data);
+          updateGraph(data.peers ?? []);
+          renderPeerCards(data.peers ?? []);
+          lastPeers = data.peers ?? [];
+        } catch {}
+      };
+      es.onerror = () => {
+        setTimeout(connectSSE, 3000); // reconectar en 3s
+      };
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+      initGraph();
+      connectSSE();
+      fetchActivity();
+      setInterval(fetchActivity, 2000);
+    });
+  </script>
+</body>
+</html>
