@@ -100,12 +100,21 @@
     };
 
     const AGENT_COLORS = {
-      'claude-code':  '#f97316',
-      'gemini-cli':   '#3b82f6',
-      'opencode':     '#8b5cf6',
-      'copilot':      '#6b7280',
-      'codex':        '#10b981',
-      'unknown':      '#64748b',
+      'claude-code':  '#f97316',  // naranja
+      'gemini-cli':   '#3b82f6',  // azul
+      'opencode':     '#8b5cf6',  // violeta
+      'copilot':      '#22c55e',  // verde
+      'codex':        '#ec4899',  // rosa
+      'unknown':      '#64748b',  // gris
+    };
+
+    const AGENT_LABELS = {
+      'claude-code':  'CC',
+      'gemini-cli':   'GM',
+      'opencode':     'OC',
+      'copilot':      'CP',
+      'codex':        'CX',
+      'unknown':      '?',
     };
 
     let cy = null;
@@ -120,16 +129,18 @@
             style: {
               'background-color': 'data(color)',
               'label': 'data(label)',
-              'color': '#f1f5f9',
-              'text-valign': 'bottom',
+              'color': '#ffffff',
+              'text-valign': 'center',
               'text-halign': 'center',
               'font-size': '10px',
+              'font-weight': 'bold',
               'font-family': 'monospace',
-              'width': 40,
-              'height': 40,
-              'border-width': 2,
+              'width': 56,
+              'height': 56,
+              'border-width': 3,
               'border-color': '#334155',
-              'text-margin-y': 4,
+              'text-wrap': 'wrap',
+              'text-max-width': '80px',
             }
           },
           {
@@ -171,8 +182,8 @@
 
       // Agregar/actualizar nodos
       for (const peer of peers) {
-        const icon = AGENT_ICONS[peer.agent] ?? '❓';
-        const label = `${icon} ${peer.role}`;
+        const agentLabel = AGENT_LABELS[peer.agent] ?? '?';
+        const label = `${agentLabel}\n${peer.role}`;
         if (graphIds.has(peer.id)) {
           cy.$(`#${peer.id}`).data({ label, status: peer.status, color: AGENT_COLORS[peer.agent] ?? '#64748b' });
         } else {
@@ -200,7 +211,9 @@
           <div class="peer-card">
             <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-2">
-                <span style="font-size: 18px">${icon}</span>
+                <div style="background:${color};color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;font-family:monospace">
+                  ${AGENT_LABELS[peer.agent] ?? '?'}
+                </div>
                 <span class="font-semibold text-sm">${peer.role}</span>
               </div>
               <span class="status-dot ${statusClass}"></span>

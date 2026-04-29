@@ -1,7 +1,8 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { startPeer } from "./lifecycle";
+import { startPeer, getCurrentPeerId } from "./lifecycle";
+import { brokerFetch } from "../broker/launcher";
 import { peersListTool } from "./tools/peers-list";
 import { peersStatusTool } from "./tools/peers-status";
 import { peersAskTool } from "./tools/peers-ask";
@@ -117,6 +118,16 @@ async function main() {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
+    // Auto-status: marcar como "working" o "waiting" antes de ejecutar
+    const selfId = getCurrentPeerId();
+    if (selfId) {
+      const statusDuringTool = (name === "peers_ask" || name === "peers_search") ? "waiting" : "working";
+      brokerFetch("/peer/heartbeat", {
+        method: "POST",
+        body: JSON.stringify({ id: selfId, status: statusDuringTool }),
+      }).catch(() => {});
+    }
+
     try {
       let result: unknown;
 
@@ -130,6 +141,14 @@ async function main() {
         case "peers_check":  result = await peersCheckTool();             break;
         default:
           return { content: [{ type: "text", text: `Tool desconocida: ${name}` }], isError: true };
+      }
+
+      // Auto-status: volver a "idle" después de ejecutar
+      if (selfId) {
+        brokerFetch("/peer/heartbeat", {
+          method: "POST",
+          body: JSON.stringify({ id: selfId, status: "idle" }),
+        }).catch(() => {});
       }
 
       // Middleware: incluir mensajes pendientes en cada respuesta
@@ -159,6 +178,13 @@ async function main() {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
     } catch (error) {
+      // Auto-status: volver a "idle" en error también
+      if (selfId) {
+        brokerFetch("/peer/heartbeat", {
+          method: "POST",
+          body: JSON.stringify({ id: selfId, status: "idle" }),
+        }).catch(() => {});
+      }
       const msg = error instanceof Error ? error.message : String(error);
       return { content: [{ type: "text", text: `Error: ${msg}` }], isError: true };
     }
