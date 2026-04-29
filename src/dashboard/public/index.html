@@ -187,39 +187,47 @@
               'background-color': 'data(bgcolor)',
               'background-image': 'data(icon)',
               'background-fit': 'contain',
-              'background-clip': 'node',
-              'background-opacity': 1,
+              'background-clip': 'none',
+              'background-opacity': 0,
+              'border-width': 0,
               'label': 'data(label)',
               'color': '#94a3b8',
               'text-valign': 'bottom',
               'text-halign': 'center',
-              'text-margin-y': 8,
+              'text-margin-y': 10,
               'font-size': '10px',
               'font-weight': 'bold',
               'font-family': 'monospace',
-              'width': 72,
-              'height': 72,
-              'border-width': 2,
-              'border-color': '#1e293b',
+              'width': 64,
+              'height': 64,
               'text-wrap': 'wrap',
               'text-max-width': '100px',
             }
           },
           {
+            selector: 'node[?hasColor]',
+            style: {
+              'background-color': 'data(color)',
+              'background-opacity': 1,
+              'border-width': 0,
+            }
+          },
+          {
             selector: 'node[status = "working"]',
             style: {
-              'border-width': 3,
+              'border-width': 2,
               'border-color': '#10b981',
-              'shadow-blur': 12,
-              'shadow-color': '#10b981',
-              'shadow-opacity': 0.6,
+              'background-opacity': 0.08,
+              'background-color': '#10b981',
             }
           },
           {
             selector: 'node[status = "waiting"]',
             style: {
-              'border-width': 3,
+              'border-width': 2,
               'border-color': '#f59e0b',
+              'background-opacity': 0.08,
+              'background-color': '#f59e0b',
             }
           },
           {
