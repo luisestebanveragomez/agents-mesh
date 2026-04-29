@@ -204,7 +204,6 @@
       document.getElementById('no-peers').style.display = 'none';
 
       container.innerHTML = peers.map(peer => {
-        const icon = AGENT_ICONS[peer.agent] ?? '❓';
         const color = AGENT_COLORS[peer.agent] ?? '#64748b';
         const statusClass = `status-${peer.status}`;
         return `
