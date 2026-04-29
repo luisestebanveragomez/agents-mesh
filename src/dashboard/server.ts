@@ -71,12 +71,14 @@ async function handler(req: Request): Promise<Response> {
     }
   }
 
-  if (path.endsWith(".css") || path.endsWith(".js")) {
+  if (path.endsWith(".css") || path.endsWith(".js") || path.startsWith("/icons/")) {
     try {
       const safePath = resolve(PUBLIC_DIR, path.slice(1));
       if (!safePath.startsWith(PUBLIC_DIR)) return new Response("Forbidden", { status: 403 });
-      const content = await readFile(safePath, "utf-8");
-      const type = path.endsWith(".css") ? "text/css" : "application/javascript";
+      const content = await readFile(safePath);
+      const ext = path.split(".").pop() ?? "";
+      const types: Record<string, string> = { css: "text/css", js: "application/javascript", ico: "image/x-icon", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg" };
+      const type = types[ext] ?? "application/octet-stream";
       return new Response(content, { headers: { ...headers, "Content-Type": type } });
     } catch {
       return new Response("", { status: 404 });
