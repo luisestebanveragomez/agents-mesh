@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claude Peers</title>
+  <title>Agent Mesh</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.29.2/cytoscape.min.js"></script>
   <style>
@@ -12,100 +12,156 @@
       --status-waiting:  #f59e0b;
       --status-idle:     #6b7280;
       --status-dead:     #ef4444;
-      --bg-main:         #0f172a;
-      --bg-card:         #1e293b;
-      --bg-hover:        #334155;
+      --bg-main:         #0a0f1e;
+      --bg-card:         #111827;
+      --bg-graph:        #0d1424;
+      --bg-hover:        #1e293b;
+      --border:          #1e293b;
       --text-primary:    #f1f5f9;
       --text-secondary:  #94a3b8;
-      --text-muted:      #64748b;
+      --text-muted:      #475569;
     }
+    * { box-sizing: border-box; }
     body { background: var(--bg-main); color: var(--text-primary); font-family: 'SF Mono', 'Fira Code', monospace; margin: 0; }
-    #graph { width: 100%; height: 300px; background: var(--bg-card); border-radius: 8px; }
-    .peer-card { background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid #334155; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-    .status-working { background: var(--status-working); }
-    .status-waiting { background: var(--status-waiting); animation: pulse 1s infinite; }
-    .status-idle { background: var(--status-idle); }
+
+    #graph {
+      width: 100%; height: 340px;
+      background: var(--bg-graph);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background-image: radial-gradient(circle, #1e293b 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .peer-card {
+      background: var(--bg-card);
+      border-radius: 10px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      transition: border-color 0.2s;
+    }
+    .peer-card:hover { border-color: #334155; }
+
+    .status-badge {
+      font-size: 9px;
+      font-weight: bold;
+      padding: 2px 7px;
+      border-radius: 999px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .status-working { background: rgba(16,185,129,0.15); color: #10b981; }
+    .status-waiting { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .status-idle    { background: rgba(107,114,128,0.12); color: #6b7280; }
+
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    .feed-line { font-size: 11px; padding: 3px 8px; border-left: 2px solid #334155; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .feed-line.message { border-color: #3b82f6; }
-    .feed-line.join { border-color: var(--status-working); }
-    .feed-line.leave { border-color: var(--status-dead); }
-    .copy-btn { cursor: pointer; opacity: 0.6; font-size: 10px; padding: 2px 6px; border: 1px solid #334155; border-radius: 4px; }
+
+    .feed-item {
+      padding: 6px 10px;
+      border-left: 2px solid #1e293b;
+      border-radius: 0 4px 4px 0;
+      margin-bottom: 4px;
+    }
+    .feed-item.message { border-color: #3b82f6; background: rgba(59,130,246,0.04); }
+    .feed-item.join    { border-color: #10b981; background: rgba(16,185,129,0.04); }
+    .feed-item.leave   { border-color: #ef4444; background: rgba(239,68,68,0.04); }
+    .feed-time { font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 1px; }
+    .feed-desc { font-size: 11px; color: var(--text-secondary); }
+
+    .stat-bar {
+      height: 3px;
+      border-radius: 2px;
+      margin-top: 8px;
+      background: var(--border);
+      overflow: hidden;
+    }
+    .stat-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s; }
+
+    .copy-btn { cursor: pointer; opacity: 0.5; font-size: 10px; padding: 1px 5px; border: 1px solid var(--border); border-radius: 3px; background: transparent; color: var(--text-muted); }
     .copy-btn:hover { opacity: 1; }
     #no-peers { display: none; }
+    .section-label { font-size: 10px; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 8px; }
   </style>
 </head>
 <body>
-  <div class="min-h-screen p-4">
+  <div class="min-h-screen p-5">
+
     <!-- Header -->
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-5">
       <div>
-        <h1 class="text-xl font-bold tracking-widest" style="color: #60a5fa">CLAUDE-PEERS</h1>
-        <div class="text-xs" style="color: var(--text-muted)">Dashboard · <span id="last-update">actualizando...</span></div>
+        <h1 class="text-lg font-bold tracking-widest" style="color: #60a5fa; letter-spacing: 0.2em">AGENT-MESH</h1>
+        <div class="text-xs mt-0.5" style="color: var(--text-muted)">
+          <span id="last-update">actualizando...</span>
+        </div>
       </div>
       <div class="flex items-center gap-2">
-        <div class="w-2 h-2 rounded-full bg-green-500" style="animation: pulse 2s infinite"></div>
-        <span class="text-xs" style="color: var(--text-muted)">2s</span>
+        <span class="w-2 h-2 rounded-full bg-green-500 inline-block" style="animation: pulse 2s infinite"></span>
+        <span class="text-xs" style="color: var(--text-muted)">live</span>
       </div>
     </div>
 
     <!-- Stats -->
-    <div id="stats-bar" class="grid grid-cols-3 gap-3 mb-4">
-      <div class="peer-card text-center">
-        <div id="stat-total" class="text-2xl font-bold text-green-400">0</div>
-        <div class="text-xs" style="color: var(--text-muted)">activos</div>
+    <div class="grid grid-cols-3 gap-3 mb-5">
+      <div class="card p-4">
+        <div class="text-xs" style="color: var(--text-muted)">ACTIVOS</div>
+        <div id="stat-total" class="text-3xl font-bold mt-1" style="color: #34d399">0</div>
+        <div class="stat-bar"><div id="bar-total" class="stat-bar-fill" style="background:#34d399;width:0%"></div></div>
       </div>
-      <div class="peer-card text-center">
-        <div id="stat-working" class="text-2xl font-bold text-blue-400">0</div>
-        <div class="text-xs" style="color: var(--text-muted)">trabajando</div>
+      <div class="card p-4">
+        <div class="text-xs" style="color: var(--text-muted)">TRABAJANDO</div>
+        <div id="stat-working" class="text-3xl font-bold mt-1" style="color: #60a5fa">0</div>
+        <div class="stat-bar"><div id="bar-working" class="stat-bar-fill" style="background:#60a5fa;width:0%"></div></div>
       </div>
-      <div class="peer-card text-center">
-        <div id="stat-waiting" class="text-2xl font-bold text-yellow-400">0</div>
-        <div class="text-xs" style="color: var(--text-muted)">esperando</div>
+      <div class="card p-4">
+        <div class="text-xs" style="color: var(--text-muted)">ESPERANDO</div>
+        <div id="stat-waiting" class="text-3xl font-bold mt-1" style="color: #fbbf24">0</div>
+        <div class="stat-bar"><div id="bar-waiting" class="stat-bar-fill" style="background:#fbbf24;width:0%"></div></div>
       </div>
     </div>
 
-    <!-- Main grid: grafo + feed -->
-    <div class="grid grid-cols-3 gap-4 mb-4">
-      <!-- Grafo -->
-      <div class="col-span-2">
-        <div class="text-xs mb-2" style="color: var(--text-muted)">RED DE PEERS</div>
+    <!-- Graph + Feed -->
+    <div class="grid gap-4 mb-5" style="grid-template-columns: 2fr 1fr">
+      <div>
+        <div class="section-label">RED DE AGENTES</div>
         <div id="graph"></div>
         <div id="no-peers" class="text-center py-8" style="color: var(--text-muted)">
-          Sin peers activos · Abre Claude Code en otro directorio
+          Sin agentes activos · Abre un agente en otro directorio
         </div>
       </div>
-
-      <!-- Activity feed -->
       <div>
-        <div class="text-xs mb-2" style="color: var(--text-muted)">ACTIVIDAD RECIENTE</div>
-        <div id="activity-feed" class="overflow-y-auto space-y-1" style="height: 300px; background: var(--bg-card); border-radius: 8px; padding: 8px;"></div>
+        <div class="section-label">ACTIVIDAD RECIENTE</div>
+        <div id="activity-feed" class="overflow-y-auto" style="height:340px; background:var(--bg-card); border-radius:10px; border:1px solid var(--border); padding:10px;"></div>
       </div>
     </div>
 
     <!-- Peer cards -->
-    <div class="text-xs mb-2" style="color: var(--text-muted)">PEERS</div>
-    <div id="peer-cards" class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))"></div>
+    <div class="section-label">AGENTES</div>
+    <div id="peer-cards" class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))"></div>
   </div>
 
   <script>
     const AGENT_COLORS = {
-      'claude-code':  '#f97316',  // naranja
-      'gemini-cli':   '#3b82f6',  // azul
-      'opencode':     '#8b5cf6',  // violeta
-      'copilot':      '#22c55e',  // verde
-      'codex':        '#ec4899',  // rosa
-      'unknown':      '#64748b',  // gris
+      'claude-code': '#f97316',
+      'gemini-cli':  '#3b82f6',
+      'opencode':    '#8b5cf6',
+      'copilot':     '#22c55e',
+      'codex':       '#ec4899',
+      'unknown':     '#64748b',
     };
 
     const AGENT_LABELS = {
-      'claude-code':  'CC',
-      'gemini-cli':   'GM',
-      'opencode':     'OC',
-      'copilot':      'CP',
-      'codex':        'CX',
-      'unknown':      '?',
+      'claude-code': 'CC',
+      'gemini-cli':  'GM',
+      'opencode':    'OC',
+      'copilot':     'CP',
+      'codex':       'CX',
+      'unknown':     '?',
     };
 
     const AGENT_ICONS = {
@@ -118,6 +174,8 @@
 
     let cy = null;
     let lastPeers = [];
+    // Rastrear edges enviados: peerA→peerB
+    const sentEdges = new Set();
 
     function initGraph() {
       cy = cytoscape({
@@ -130,39 +188,61 @@
               'background-image': 'data(icon)',
               'background-fit': 'contain',
               'background-clip': 'node',
+              'background-opacity': 1,
               'label': 'data(label)',
-              'color': '#ffffff',
+              'color': '#94a3b8',
               'text-valign': 'bottom',
               'text-halign': 'center',
-              'text-margin-y': 6,
+              'text-margin-y': 8,
               'font-size': '10px',
               'font-weight': 'bold',
               'font-family': 'monospace',
-              'width': 56,
-              'height': 56,
-              'border-width': 3,
-              'border-color': '#334155',
+              'width': 72,
+              'height': 72,
+              'border-width': 2,
+              'border-color': '#1e293b',
               'text-wrap': 'wrap',
-              'text-max-width': '80px',
+              'text-max-width': '100px',
             }
           },
           {
             selector: 'node[status = "working"]',
-            style: { 'border-color': '#10b981' }
+            style: {
+              'border-width': 3,
+              'border-color': '#10b981',
+              'shadow-blur': 12,
+              'shadow-color': '#10b981',
+              'shadow-opacity': 0.6,
+            }
           },
           {
             selector: 'node[status = "waiting"]',
-            style: { 'border-color': '#f59e0b' }
+            style: {
+              'border-width': 3,
+              'border-color': '#f59e0b',
+            }
           },
           {
             selector: 'edge',
             style: {
-              'width': 2,
-              'line-color': '#3b82f6',
-              'target-arrow-color': '#3b82f6',
+              'width': 1.5,
+              'line-color': '#334155',
+              'target-arrow-color': '#475569',
               'target-arrow-shape': 'triangle',
               'curve-style': 'bezier',
-              'opacity': 0.7,
+              'opacity': 0.5,
+              'line-style': 'dashed',
+              'line-dash-pattern': [4, 4],
+            }
+          },
+          {
+            selector: 'edge.active',
+            style: {
+              'line-color': '#3b82f6',
+              'target-arrow-color': '#3b82f6',
+              'opacity': 0.9,
+              'line-style': 'solid',
+              'width': 2,
             }
           }
         ],
@@ -178,12 +258,10 @@
       const currentIds = new Set(peers.map(p => p.id));
       const graphIds = new Set(cy.nodes().map(n => n.id()));
 
-      // Eliminar nodos que ya no están
       cy.nodes().forEach(n => {
         if (!currentIds.has(n.id())) cy.remove(n);
       });
 
-      // Agregar/actualizar nodos
       for (const peer of peers) {
         const label = peer.role;
         const color = AGENT_COLORS[peer.agent] ?? '#64748b';
@@ -196,7 +274,34 @@
         }
       }
 
-      cy.layout({ name: 'grid', rows: 2 }).run();
+      // Edges entre todos los peers (red completa)
+      for (let i = 0; i < peers.length; i++) {
+        for (let j = i + 1; j < peers.length; j++) {
+          const edgeId = `e-${peers[i].id}-${peers[j].id}`;
+          if (!cy.$(`#${edgeId}`).length) {
+            cy.add({ data: { id: edgeId, source: peers[i].id, target: peers[j].id } });
+          }
+        }
+      }
+
+      // Eliminar edges de peers que ya no existen
+      cy.edges().forEach(e => {
+        if (!currentIds.has(e.data('source')) || !currentIds.has(e.data('target'))) {
+          cy.remove(e);
+        }
+      });
+
+      const layout = peers.length <= 2 ? 'grid' : 'cose';
+      cy.layout({
+        name: layout,
+        padding: 40,
+        animate: false,
+        ...(layout === 'cose' ? { nodeRepulsion: 8000, idealEdgeLength: 120 } : { rows: 2 }),
+      }).run();
+    }
+
+    function statusBadge(status) {
+      return `<span class="status-badge status-${status}">${status}</span>`;
     }
 
     function renderPeerCards(peers) {
@@ -210,25 +315,36 @@
 
       container.innerHTML = peers.map(peer => {
         const color = AGENT_COLORS[peer.agent] ?? '#64748b';
-        const statusClass = `status-${peer.status}`;
+        const iconHtml = AGENT_ICONS[peer.agent]
+          ? `<img src="${AGENT_ICONS[peer.agent]}" style="width:32px;height:32px;object-fit:contain;flex-shrink:0" />`
+          : `<div style="background:${color};width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:bold">${AGENT_LABELS[peer.agent] ?? '?'}</span></div>`;
+
+        const uptime = peer.started_at
+          ? Math.floor((Date.now() - new Date(peer.started_at).getTime()) / 60000) + 'm'
+          : '';
+
         return `
           <div class="peer-card">
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-2">
-                ${AGENT_ICONS[peer.agent]
-                  ? `<img src="${AGENT_ICONS[peer.agent]}" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" />`
-                  : `<div style="background:${color};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:11px;font-weight:bold;font-family:monospace">${AGENT_LABELS[peer.agent] ?? '?'}</span></div>`}
-                <span class="font-semibold text-sm">${peer.role}</span>
+                ${iconHtml}
+                <div>
+                  <div class="font-semibold text-sm">${peer.role}</div>
+                  <div style="font-size:10px;color:var(--text-muted)">${peer.agent} ${peer.agent_version !== 'unknown' ? peer.agent_version : ''}</div>
+                </div>
               </div>
-              <span class="status-dot ${statusClass}"></span>
+              ${statusBadge(peer.status)}
             </div>
-            <div class="text-xs space-y-1" style="color: var(--text-secondary)">
-              <div>📁 ${peer.path}</div>
-              <div>🤖 ${peer.agent} ${peer.agent_version !== 'unknown' ? peer.agent_version : ''}</div>
-              ${peer.current_task ? `<div style="color: var(--text-primary)">💬 ${peer.current_task}</div>` : ''}
-              <div class="flex items-center gap-2 mt-2">
-                <span style="color: var(--text-muted); font-size: 10px">${peer.id}</span>
-                <button class="copy-btn" onclick="navigator.clipboard.writeText('${peer.id}')">📋</button>
+            <div class="space-y-1" style="font-size:11px;color:var(--text-secondary)">
+              <div style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${peer.path}</div>
+              ${peer.git_branch ? `<div style="color:#60a5fa">⎇ ${peer.git_branch}</div>` : ''}
+              ${peer.current_task ? `<div style="color:var(--text-primary);margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px">${peer.current_task}</div>` : ''}
+            </div>
+            <div class="flex items-center justify-between mt-3" style="border-top:1px solid var(--border);padding-top:8px">
+              <span style="color:var(--text-muted);font-size:10px">${peer.id}</span>
+              <div class="flex items-center gap-2">
+                ${uptime ? `<span style="color:var(--text-muted);font-size:10px">${uptime}</span>` : ''}
+                <button class="copy-btn" onclick="navigator.clipboard.writeText('${peer.id}')">copy</button>
               </div>
             </div>
           </div>
@@ -238,30 +354,42 @@
 
     function renderActivity(lines) {
       const feed = document.getElementById('activity-feed');
-      feed.innerHTML = lines.slice(0, 30).map(line => {
+      feed.innerHTML = lines.slice(0, 40).map(line => {
         const parts = line.split('|');
-        const type = parts[1] ?? '';
-        let cssClass = 'feed-line';
-        if (type === 'message') cssClass += ' message';
-        else if (type === 'peer_join') cssClass += ' join';
-        else if (type === 'peer_leave' || type === 'peer_timeout') cssClass += ' leave';
+        const type = parts[1]?.trim() ?? '';
+        let cls = 'feed-item';
+        if (type === 'message') cls += ' message';
+        else if (type === 'peer_join') cls += ' join';
+        else if (type === 'peer_leave' || type === 'peer_timeout') cls += ' leave';
 
         const time = parts[0] ? new Date(parts[0]).toLocaleTimeString() : '';
-        const rest = parts.slice(1).join(' · ');
-        return `<div class="${cssClass}"><span style="color: var(--text-muted)">${time}</span> ${rest}</div>`;
+        const desc = parts.slice(1).map(p => p.trim()).filter(Boolean).join(' · ');
+        return `<div class="${cls}">
+          <span class="feed-time">${time}</span>
+          <span class="feed-desc">${desc}</span>
+        </div>`;
       }).join('');
     }
 
     function updateStats(data) {
-      document.getElementById('stat-total').textContent = data.total ?? 0;
-      document.getElementById('stat-working').textContent = data.working ?? 0;
-      document.getElementById('stat-waiting').textContent = data.waiting ?? 0;
+      const total = data.total ?? 0;
+      const working = data.working ?? 0;
+      const waiting = data.waiting ?? 0;
+
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-working').textContent = working;
+      document.getElementById('stat-waiting').textContent = waiting;
       document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+
+      const pct = v => total > 0 ? Math.round((v / total) * 100) : 0;
+      document.getElementById('bar-total').style.width = total > 0 ? '100%' : '0%';
+      document.getElementById('bar-working').style.width = pct(working) + '%';
+      document.getElementById('bar-waiting').style.width = pct(waiting) + '%';
     }
 
     async function fetchActivity() {
       try {
-        const res = await fetch('/api/activity?limit=30');
+        const res = await fetch('/api/activity?limit=40');
         const lines = await res.json();
         renderActivity(lines);
       } catch {}
@@ -278,7 +406,6 @@
       } catch {}
     }
 
-    // SSE para updates de peers (con fallback a polling)
     function connectSSE() {
       const es = new EventSource('/api/stream');
       es.onmessage = (e) => {
@@ -290,19 +417,15 @@
           lastPeers = data.peers ?? [];
         } catch {}
       };
-      es.onerror = () => {
-        es.close();
-        setTimeout(connectSSE, 3000);
-      };
+      es.onerror = () => { es.close(); setTimeout(connectSSE, 3000); };
     }
 
-    // Init
     document.addEventListener('DOMContentLoaded', () => {
       initGraph();
-      fetchPeers(); // carga inmediata via polling
+      fetchPeers();
       connectSSE();
       fetchActivity();
-      setInterval(fetchPeers, 2000);    // polling de respaldo
+      setInterval(fetchPeers, 2000);
       setInterval(fetchActivity, 2000);
     });
   </script>
