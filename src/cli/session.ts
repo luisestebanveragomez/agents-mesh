@@ -1,14 +1,18 @@
 import { readFile } from "fs/promises";
 import { join } from "path";
-import { DATA_DIR } from "../shared/constants";
-import { readPeer } from "../mcp/storage/peer-registry";
-import { Peer } from "../shared/types";
+import { homedir } from "os";
+import { brokerFetch } from "../broker/launcher";
+import { BrokerPeer } from "../broker/types";
 
-export async function getSessionPeer(): Promise<Peer | null> {
+const SESSION_FILE = join(homedir(), ".claude-peers-session.json");
+
+export async function getSessionPeer(): Promise<BrokerPeer | null> {
   try {
-    const raw = await readFile(join(DATA_DIR, "session.json"), "utf-8");
+    const raw = await readFile(SESSION_FILE, "utf-8");
     const { peer_id } = JSON.parse(raw);
-    return await readPeer(peer_id);
+    if (!peer_id) return null;
+    const peers = await brokerFetch<BrokerPeer[]>("/peers");
+    return peers.find(p => p.id === peer_id) ?? null;
   } catch {
     return null;
   }

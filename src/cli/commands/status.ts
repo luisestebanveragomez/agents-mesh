@@ -1,23 +1,21 @@
-import { updatePeerStatus } from "../../mcp/storage/peer-registry";
-import { PeerStatus } from "../../shared/types";
+import { ensureBroker, brokerFetch } from "../../broker/launcher";
+import { getSessionPeer } from "../session";
 
 export async function statusCommand(options: {
-  status?: PeerStatus;
+  status?: string;
   task?: string;
   role?: string;
 }): Promise<void> {
-  const { getSessionPeer } = await import("../session");
+  await ensureBroker();
   const self = await getSessionPeer();
-
   if (!self) {
-    console.error("❌ No estás registrado como peer");
+    console.error("❌ No estás registrado");
     process.exit(1);
   }
 
-  await updatePeerStatus(self.id, {
-    status: options.status,
-    current_task: options.task,
-    role: options.role,
+  await brokerFetch("/peer/status", {
+    method: "POST",
+    body: JSON.stringify({ id: self.id, status: options.status, current_task: options.task, role: options.role }),
   });
 
   console.log("✅ Estado actualizado");
