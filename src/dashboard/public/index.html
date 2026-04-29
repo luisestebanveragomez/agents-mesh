@@ -207,7 +207,7 @@
             </div>
             <div class="text-xs space-y-1" style="color: var(--text-secondary)">
               <div>📁 ${peer.path}</div>
-              <div>🤖 ${peer.agent} ${peer.agent_version}</div>
+              <div>🤖 ${peer.agent} ${peer.agent_version !== 'unknown' ? peer.agent_version : ''}</div>
               ${peer.current_task ? `<div style="color: var(--text-primary)">💬 ${peer.current_task}</div>` : ''}
               <div class="flex items-center gap-2 mt-2">
                 <span style="color: var(--text-muted); font-size: 10px">${peer.id}</span>
