@@ -25,7 +25,8 @@
     body { background: var(--bg-main); color: var(--text-primary); font-family: 'SF Mono', 'Fira Code', monospace; margin: 0; }
 
     #graph {
-      width: 100%; height: 380px;
+      width: 100%;
+      min-height: 300px;
       background: var(--bg-graph);
       border-radius: 10px;
       border: 1px solid var(--border);
@@ -198,8 +199,8 @@
               'font-family': 'monospace',
               'width': 72,
               'height': 72,
-              'text-wrap': 'wrap',
-              'text-max-width': '100px',
+              'text-wrap': 'ellipsis',
+              'text-max-width': '120px',
             }
           },
           {
@@ -287,14 +288,16 @@
         }
       });
 
+      // Altura dinámica: mínimo 300px, crece con más peers
+      const graphH = Math.max(300, Math.ceil(peers.length / 4) * 220);
+      document.getElementById('graph').style.height = graphH + 'px';
+
+      const layoutName = peers.length <= 1 ? 'grid' : 'circle';
       cy.layout({
-        name: 'cose',
+        name: layoutName,
         padding: 80,
         animate: false,
-        nodeRepulsion: 20000,
-        idealEdgeLength: 180,
-        nodeOverlap: 100,
-        randomize: false,
+        spacingFactor: 1.6,
       }).run();
     }
 
