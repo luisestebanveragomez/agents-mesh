@@ -48,6 +48,11 @@ async function handler(req: Request): Promise<Response> {
     return Response.json(data, { headers });
   }
 
+  if (path === "/api/connections") {
+    const data = await brokerGet("/connections").catch(() => []);
+    return Response.json(data, { headers });
+  }
+
   if (path === "/api/activity") {
     const limit = url.searchParams.get("limit") || "50";
     const data = await brokerGet(`/activity?limit=${limit}`).catch(() => []);

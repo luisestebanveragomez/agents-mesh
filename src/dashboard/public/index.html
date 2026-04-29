@@ -174,8 +174,6 @@
 
     let cy = null;
     let lastPeers = [];
-    // Rastrear edges enviados: peerA→peerB
-    const sentEdges = new Set();
 
     function initGraph() {
       cy = cytoscape({
@@ -282,16 +280,6 @@
         }
       }
 
-      // Edges entre todos los peers (red completa)
-      for (let i = 0; i < peers.length; i++) {
-        for (let j = i + 1; j < peers.length; j++) {
-          const edgeId = `e-${peers[i].id}-${peers[j].id}`;
-          if (!cy.$(`#${edgeId}`).length) {
-            cy.add({ data: { id: edgeId, source: peers[i].id, target: peers[j].id } });
-          }
-        }
-      }
-
       // Eliminar edges de peers que ya no existen
       cy.edges().forEach(e => {
         if (!currentIds.has(e.data('source')) || !currentIds.has(e.data('target'))) {
@@ -395,6 +383,29 @@
       document.getElementById('bar-waiting').style.width = pct(waiting) + '%';
     }
 
+    async function fetchConnections() {
+      try {
+        const res = await fetch('/api/connections');
+        const pairs = await res.json();
+        if (!cy) return;
+        // Agregar edges nuevos
+        for (const { a, b } of pairs) {
+          const edgeId = [a, b].sort().join('--');
+          if (!cy.$(`#${edgeId}`).length && cy.$(`#${a}`).length && cy.$(`#${b}`).length) {
+            cy.add({ data: { id: edgeId, source: a, target: b } });
+          }
+        }
+        // Eliminar edges que ya no tienen peers activos
+        cy.edges().forEach(e => {
+          const active = pairs.some(p => {
+            const key = [p.a, p.b].sort().join('--');
+            return key === e.id();
+          });
+          if (!active) cy.remove(e);
+        });
+      } catch {}
+    }
+
     async function fetchActivity() {
       try {
         const res = await fetch('/api/activity?limit=40');
@@ -433,7 +444,9 @@
       fetchPeers();
       connectSSE();
       fetchActivity();
+      fetchConnections();
       setInterval(fetchPeers, 2000);
+      setInterval(fetchConnections, 3000);
       setInterval(fetchActivity, 2000);
     });
   </script>

@@ -148,6 +148,22 @@ async function handleRequest(req: Request): Promise<Response> {
     return json(lines);
   }
 
+  // ── Connections (pares que han intercambiado mensajes) ────
+  if (path === "/connections" && method === "GET") {
+    const db = getDb();
+    const rows = db.query(
+      "SELECT DISTINCT from_id, to_id FROM messages"
+    ).all() as { from_id: string; to_id: string }[];
+    // Normalizar: siempre el ID menor primero para evitar duplicados A-B / B-A
+    const seen = new Set<string>();
+    const pairs: { a: string; b: string }[] = [];
+    for (const { from_id, to_id } of rows) {
+      const key = [from_id, to_id].sort().join('|');
+      if (!seen.has(key)) { seen.add(key); pairs.push({ a: from_id, b: to_id }); }
+    }
+    return json(pairs);
+  }
+
   // ── Stats ─────────────────────────────────────────────────
   if (path === "/stats" && method === "GET") {
     const db = getDb();
