@@ -92,13 +92,12 @@
     .graph-feed-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      grid-template-rows: auto;
+      align-items: start;
     }
-    .graph-col, .feed-col { display: flex; flex-direction: column; }
-    .feed-col #activity-feed { flex: 1; min-height: 0; }
     #graph { width: 100%; }
+    #activity-feed { overflow-y: auto; }
 
-    @media (max-width: 768px) {
+    @media (max-width: 900px) {
       .graph-feed-grid { grid-template-columns: 1fr; }
     }
   </style>
@@ -312,6 +311,7 @@
         document.getElementById('activity-feed').style.height = graphH + 'px';
         const layoutName = peers.length <= 1 ? 'grid' : 'circle';
         cy.layout({ name: layoutName, padding: 80, animate: false, spacingFactor: 1.6 }).run();
+        cy.resize();
       }
     }
 
