@@ -21,17 +21,42 @@
       --text-secondary:  #94a3b8;
       --text-muted:      #475569;
     }
-    * { box-sizing: border-box; }
-    body { background: var(--bg-main); color: var(--text-primary); font-family: 'SF Mono', 'Fira Code', monospace; margin: 0; }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; overflow-x: hidden; }
+    body { background: var(--bg-main); color: var(--text-primary); font-family: 'SF Mono', 'Fira Code', monospace; }
+
+    .page { max-width: 1400px; margin: 0 auto; padding: 20px 20px; }
 
     #graph {
       width: 100%;
-      min-height: 300px;
+      height: 340px;
       background: var(--bg-graph);
       border-radius: 10px;
       border: 1px solid var(--border);
       background-image: radial-gradient(circle, #1e293b 1px, transparent 1px);
       background-size: 28px 28px;
+    }
+    #activity-feed {
+      height: 340px;
+      overflow-y: auto;
+      background: var(--bg-card);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 10px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      min-width: 0;
+    }
+    .two-col > * { min-width: 0; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
     }
 
     .card {
@@ -39,23 +64,25 @@
       border-radius: 10px;
       border: 1px solid var(--border);
     }
-
     .peer-card {
       background: var(--bg-card);
       border-radius: 10px;
       padding: 14px 16px;
       border: 1px solid var(--border);
       transition: border-color 0.2s;
+      min-width: 0;
     }
     .peer-card:hover { border-color: #334155; }
+    .peers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+    }
 
     .status-badge {
-      font-size: 9px;
-      font-weight: bold;
-      padding: 2px 7px;
-      border-radius: 999px;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
+      font-size: 9px; font-weight: bold; padding: 2px 7px;
+      border-radius: 999px; letter-spacing: 0.05em; text-transform: uppercase;
+      white-space: nowrap; flex-shrink: 0;
     }
     .status-working { background: rgba(16,185,129,0.15); color: #10b981; }
     .status-waiting { background: rgba(245,158,11,0.15); color: #f59e0b; }
@@ -63,25 +90,14 @@
 
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-    .feed-item {
-      padding: 6px 10px;
-      border-left: 2px solid #1e293b;
-      border-radius: 0 4px 4px 0;
-      margin-bottom: 4px;
-    }
+    .feed-item { padding: 6px 10px; border-left: 2px solid #1e293b; border-radius: 0 4px 4px 0; margin-bottom: 4px; }
     .feed-item.message { border-color: #3b82f6; background: rgba(59,130,246,0.04); }
     .feed-item.join    { border-color: #10b981; background: rgba(16,185,129,0.04); }
     .feed-item.leave   { border-color: #ef4444; background: rgba(239,68,68,0.04); }
     .feed-time { font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 1px; }
-    .feed-desc { font-size: 11px; color: var(--text-secondary); }
+    .feed-desc { font-size: 11px; color: var(--text-secondary); word-break: break-word; }
 
-    .stat-bar {
-      height: 3px;
-      border-radius: 2px;
-      margin-top: 8px;
-      background: var(--border);
-      overflow: hidden;
-    }
+    .stat-bar { height: 3px; border-radius: 2px; margin-top: 8px; background: var(--border); overflow: hidden; }
     .stat-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s; }
 
     .copy-btn { cursor: pointer; opacity: 0.5; font-size: 10px; padding: 1px 5px; border: 1px solid var(--border); border-radius: 3px; background: transparent; color: var(--text-muted); }
@@ -89,73 +105,69 @@
     #no-peers { display: none; }
     .section-label { font-size: 10px; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 8px; }
 
-    .graph-feed-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      align-items: start;
+    @media (max-width: 860px) {
+      .two-col   { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      #graph, #activity-feed { height: 300px; }
     }
-    #graph { width: 100%; }
-    #activity-feed { overflow-y: auto; }
-
-    @media (max-width: 900px) {
-      .graph-feed-grid { grid-template-columns: 1fr; }
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .peers-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <div class="min-h-screen p-5">
+  <div class="page">
 
     <!-- Header -->
-    <div class="flex items-center justify-between mb-5">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div>
-        <h1 class="text-lg font-bold tracking-widest" style="color: #60a5fa; letter-spacing: 0.2em">AGENT-MESH</h1>
-        <div class="text-xs mt-0.5" style="color: var(--text-muted)">
-          <span id="last-update">actualizando...</span>
-        </div>
+        <h1 style="color:#60a5fa;letter-spacing:0.2em;font-size:1.1rem;font-weight:bold;margin:0">AGENT-MESH</h1>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px"><span id="last-update">actualizando...</span></div>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-green-500 inline-block" style="animation: pulse 2s infinite"></span>
-        <span class="text-xs" style="color: var(--text-muted)">live</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;animation:pulse 2s infinite"></span>
+        <span style="font-size:11px;color:var(--text-muted)">live</span>
       </div>
     </div>
 
     <!-- Stats -->
-    <div class="grid grid-cols-3 gap-3 mb-5">
+    <div class="stats-grid" style="margin-bottom:16px">
       <div class="card p-4">
-        <div class="text-xs" style="color: var(--text-muted)">ACTIVOS</div>
-        <div id="stat-total" class="text-3xl font-bold mt-1" style="color: #34d399">0</div>
+        <div style="font-size:10px;color:var(--text-muted)">ACTIVOS</div>
+        <div id="stat-total" style="font-size:2rem;font-weight:bold;color:#34d399;margin-top:4px">0</div>
         <div class="stat-bar"><div id="bar-total" class="stat-bar-fill" style="background:#34d399;width:0%"></div></div>
       </div>
       <div class="card p-4">
-        <div class="text-xs" style="color: var(--text-muted)">TRABAJANDO</div>
-        <div id="stat-working" class="text-3xl font-bold mt-1" style="color: #60a5fa">0</div>
+        <div style="font-size:10px;color:var(--text-muted)">TRABAJANDO</div>
+        <div id="stat-working" style="font-size:2rem;font-weight:bold;color:#60a5fa;margin-top:4px">0</div>
         <div class="stat-bar"><div id="bar-working" class="stat-bar-fill" style="background:#60a5fa;width:0%"></div></div>
       </div>
       <div class="card p-4">
-        <div class="text-xs" style="color: var(--text-muted)">ESPERANDO</div>
-        <div id="stat-waiting" class="text-3xl font-bold mt-1" style="color: #fbbf24">0</div>
+        <div style="font-size:10px;color:var(--text-muted)">ESPERANDO</div>
+        <div id="stat-waiting" style="font-size:2rem;font-weight:bold;color:#fbbf24;margin-top:4px">0</div>
         <div class="stat-bar"><div id="bar-waiting" class="stat-bar-fill" style="background:#fbbf24;width:0%"></div></div>
       </div>
     </div>
 
     <!-- Graph + Feed -->
-    <div class="graph-feed-grid gap-4 mb-5">
-      <div class="graph-col">
+    <div class="two-col" style="margin-bottom:16px">
+      <div>
         <div class="section-label">RED DE AGENTES</div>
-        <div id="graph" style="height:340px"></div>
-        <div id="no-peers" class="text-center py-8" style="color: var(--text-muted)">
+        <div id="graph"></div>
+        <div id="no-peers" style="text-align:center;padding:32px 0;color:var(--text-muted)">
           Sin agentes activos · Abre un agente en otro directorio
         </div>
       </div>
-      <div class="feed-col">
+      <div>
         <div class="section-label">ACTIVIDAD RECIENTE</div>
-        <div id="activity-feed" class="overflow-y-auto" style="background:var(--bg-card); border-radius:10px; border:1px solid var(--border); padding:10px;"></div>
+        <div id="activity-feed"></div>
       </div>
     </div>
 
     <!-- Peer cards -->
     <div class="section-label">AGENTES</div>
-    <div id="peer-cards" class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))"></div>
+    <div id="peer-cards" class="peers-grid"></div>
   </div>
 
   <script>
@@ -306,9 +318,6 @@
       // Solo re-layoutear si cambió la cantidad de peers
       if (countChanged) {
         lastPeerCount = peers.length;
-        const graphH = Math.max(340, Math.ceil(peers.length / 4) * 220);
-        document.getElementById('graph').style.height = graphH + 'px';
-        document.getElementById('activity-feed').style.height = graphH + 'px';
         const layoutName = peers.length <= 1 ? 'grid' : 'circle';
         cy.layout({ name: layoutName, padding: 80, animate: false, spacingFactor: 1.6 }).run();
         cy.resize();
