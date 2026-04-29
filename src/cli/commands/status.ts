@@ -1,4 +1,4 @@
-import { listPeers, updatePeerStatus } from "../../mcp/storage/peer-registry";
+import { updatePeerStatus } from "../../mcp/storage/peer-registry";
 import { PeerStatus } from "../../shared/types";
 
 export async function statusCommand(options: {
@@ -6,8 +6,8 @@ export async function statusCommand(options: {
   task?: string;
   role?: string;
 }): Promise<void> {
-  const peers = await listPeers();
-  const self = peers.find(p => p.pid === process.pid);
+  const { getSessionPeer } = await import("../session");
+  const self = await getSessionPeer();
 
   if (!self) {
     console.error("❌ No estás registrado como peer");

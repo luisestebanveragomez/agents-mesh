@@ -2,6 +2,7 @@ import { listPeers, readPeer } from "../storage/peer-registry";
 import { enqueueMessage, readResponse, deleteResponse, deleteMessage } from "../storage/message-queue";
 import { logActivity } from "../storage/activity-log";
 import { getCurrentPeerId } from "../lifecycle";
+import { validateMessage } from "../security";
 import { Message, SearchMatch } from "../../shared/types";
 import { generateId, now, expiresAt } from "../../shared/utils";
 import { TTL_S } from "../../shared/constants";
@@ -41,8 +42,11 @@ export async function peersSearchTool(args: {
       read_at: null,
       responded_at: null,
     };
-    await enqueueMessage(msg);
-    msgIds.set(peer.id, msgId);
+    const validation = validateMessage(msg);
+    if (validation.valid) {
+      await enqueueMessage(msg);
+      msgIds.set(peer.id, msgId);
+    }
   }
 
   // Esperar respuestas con timeout

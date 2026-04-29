@@ -1,3 +1,6 @@
+import { readFile } from "fs/promises";
+import { join } from "path";
+import { MESSAGES_DIR } from "../../shared/constants";
 import { getCurrentPeerId } from "../lifecycle";
 import { writeResponse, markMessageRead } from "../storage/message-queue";
 import { logActivity } from "../storage/activity-log";
@@ -8,10 +11,6 @@ export async function peersReplyTool(args: {
 }): Promise<object> {
   const selfId = getCurrentPeerId();
   if (!selfId) return { error: "No peer registrado" };
-
-  const { readFile } = await import("fs/promises");
-  const { join } = await import("path");
-  const { MESSAGES_DIR } = await import("../../shared/constants");
 
   try {
     const msgPath = join(MESSAGES_DIR, selfId, `${args.message_id}.msg`);

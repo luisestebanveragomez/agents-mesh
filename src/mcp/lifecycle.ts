@@ -57,7 +57,11 @@ export async function startPeer(): Promise<string> {
   }, 60_000);
 
   // Cleanup al salir
+  let cleanupDone = false;
+
   const cleanup = async () => {
+    if (cleanupDone) return;
+    cleanupDone = true;
     clearInterval(heartbeatTimer);
     clearInterval(cleanupTimer);
     await deletePeer(id);

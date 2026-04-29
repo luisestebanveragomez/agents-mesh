@@ -2,8 +2,10 @@ import { ensureDirectories, writePeer, deletePeer, updateHeartbeat } from "../mc
 import { logActivity } from "../mcp/storage/activity-log";
 import { inferRole } from "../mcp/role-inferrer";
 import { generateId, now } from "../shared/utils";
-import { HEARTBEAT_MS } from "../shared/constants";
+import { HEARTBEAT_MS, DATA_DIR } from "../shared/constants";
 import { Peer, AgentName } from "../shared/types";
+import { join } from "path";
+import { writeFile } from "fs/promises";
 
 export async function register(options: {
   agent?: string;
@@ -29,6 +31,7 @@ export async function register(options: {
   };
 
   await writePeer(peer);
+  await writeFile(join(DATA_DIR, "session.json"), JSON.stringify({ peer_id: id, pid: process.pid }), "utf-8");
   await logActivity("peer_join", id, role, agentName, process.cwd());
 
   console.log(`✅ Peer registrado: ${id}`);
@@ -44,6 +47,7 @@ export async function register(options: {
       clearInterval(timer);
       await deletePeer(id);
       await logActivity("peer_leave", id, role, agentName);
+      await writeFile(join(DATA_DIR, "session.json"), JSON.stringify({}), "utf-8").catch(() => {});
       console.log(`\n👋 Peer ${id} eliminado`);
       process.exit(0);
     };

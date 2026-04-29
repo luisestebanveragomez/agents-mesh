@@ -6,14 +6,15 @@ import { generateId, now, expiresAt } from "../../shared/utils";
 import { TTL_S } from "../../shared/constants";
 
 export async function notifyCommand(message: string, category: MessageCategory = "info"): Promise<void> {
-  const peers = await listPeers();
-  const self = peers.find(p => p.pid === process.pid);
+  const { getSessionPeer } = await import("../session");
+  const self = await getSessionPeer();
 
   if (!self) {
     console.error("❌ No estás registrado como peer. Ejecuta: claude-peers register");
     process.exit(1);
   }
 
+  const peers = await listPeers();
   const targets = peers.filter(p => p.id !== self.id);
   if (targets.length === 0) {
     console.log("Sin otros peers activos");

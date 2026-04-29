@@ -1,5 +1,5 @@
 import { serve } from "bun";
-import { join } from "path";
+import { join, resolve } from "path";
 import { readFile } from "fs/promises";
 import { DASHBOARD_PORT } from "../shared/constants";
 import { listPeers } from "../mcp/storage/peer-registry";
@@ -118,7 +118,11 @@ async function handler(req: Request): Promise<Response> {
 
   if (path.endsWith(".css")) {
     try {
-      const css = await readFile(join(PUBLIC_DIR, path.slice(1)), "utf-8");
+      const safePath = resolve(PUBLIC_DIR, path.slice(1));
+      if (!safePath.startsWith(PUBLIC_DIR)) {
+        return new Response("Forbidden", { status: 403 });
+      }
+      const css = await readFile(safePath, "utf-8");
       return new Response(css, {
         headers: { ...headers, "Content-Type": "text/css" },
       });
@@ -129,7 +133,11 @@ async function handler(req: Request): Promise<Response> {
 
   if (path.endsWith(".js")) {
     try {
-      const js = await readFile(join(PUBLIC_DIR, path.slice(1)), "utf-8");
+      const safePath = resolve(PUBLIC_DIR, path.slice(1));
+      if (!safePath.startsWith(PUBLIC_DIR)) {
+        return new Response("Forbidden", { status: 403 });
+      }
+      const js = await readFile(safePath, "utf-8");
       return new Response(js, {
         headers: { ...headers, "Content-Type": "application/javascript" },
       });

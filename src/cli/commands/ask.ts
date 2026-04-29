@@ -6,9 +6,8 @@ import { generateId, now, expiresAt } from "../../shared/utils";
 import { TTL_S } from "../../shared/constants";
 
 export async function askCommand(target: string, question: string, timeoutSec = TTL_S): Promise<void> {
-  // Leer el peer actual desde el filesystem (buscar .peer file con nuestro PID)
-  const peers = await listPeers();
-  const self = peers.find(p => p.pid === process.pid);
+  const { getSessionPeer } = await import("../session");
+  const self = await getSessionPeer();
 
   if (!self) {
     console.error("❌ No estás registrado como peer. Ejecuta: claude-peers register");
