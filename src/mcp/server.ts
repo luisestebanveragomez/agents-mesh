@@ -125,11 +125,34 @@ async function main() {
         case "peers_status": result = await peersStatusTool(args as any); break;
         case "peers_ask":    result = await peersAskTool(args as any);    break;
         case "peers_reply":  result = await peersReplyTool(args as any);  break;
-        case "peers_notify":  result = await peersNotifyTool(args as any);  break;
-        case "peers_search":  result = await peersSearchTool(args as any);  break;
-        case "peers_check":   result = await peersCheckTool();               break;
+        case "peers_notify": result = await peersNotifyTool(args as any); break;
+        case "peers_search": result = await peersSearchTool(args as any); break;
+        case "peers_check":  result = await peersCheckTool();             break;
         default:
           return { content: [{ type: "text", text: `Tool desconocida: ${name}` }], isError: true };
+      }
+
+      // Middleware: incluir mensajes pendientes en cada respuesta
+      const { getPendingMessages, clearPendingMessages } = await import("./lifecycle");
+      const pending = getPendingMessages();
+      if (pending.length > 0 && name !== "peers_check" && name !== "peers_reply") {
+        const { formatForAgent } = await import("./security");
+        const formatted = pending.map(msg => formatForAgent({
+          id: msg.id, from: msg.from_id, from_role: msg.from_role, from_agent: msg.from_agent as any,
+          to: msg.to_id, to_role: msg.to_role, type: msg.type as any, content: msg.content,
+          metadata: {}, created_at: msg.created_at, expires_at: msg.expires_at,
+          read_at: null, responded_at: null,
+        })).join("\n\n---\n\n");
+        clearPendingMessages();
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⚠️ MENSAJES PENDIENTES DE OTROS PEERS:\n\n${formatted}\n\n---\n\nRESULTADO DE ${name}:\n${JSON.stringify(result, null, 2)}`,
+            },
+          ],
+        };
       }
 
       return {

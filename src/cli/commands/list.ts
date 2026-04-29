@@ -1,8 +1,9 @@
-import { listPeers } from "../../mcp/storage/peer-registry";
-import { PeerFilter } from "../../shared/types";
+import { ensureBroker, brokerFetch } from "../../broker/launcher";
+import { BrokerPeer } from "../../broker/types";
 
-export async function listCommand(filter?: PeerFilter): Promise<void> {
-  const peers = await listPeers(filter);
+export async function listCommand(): Promise<void> {
+  await ensureBroker();
+  const peers = await brokerFetch<BrokerPeer[]>("/peers");
 
   if (peers.length === 0) {
     console.log("Sin peers activos");
@@ -11,8 +12,8 @@ export async function listCommand(filter?: PeerFilter): Promise<void> {
 
   console.log(`\n🤖 Peers activos (${peers.length}):\n`);
   for (const peer of peers) {
-    const statusIcon = peer.status === "working" ? "🟢" : peer.status === "waiting" ? "🟡" : "⚫";
-    console.log(`  ${statusIcon} ${peer.id}`);
+    const icon = peer.status === "working" ? "🟢" : peer.status === "waiting" ? "🟡" : "⚫";
+    console.log(`  ${icon} ${peer.id}`);
     console.log(`     Role:   ${peer.role}`);
     console.log(`     Agent:  ${peer.agent} ${peer.agent_version}`);
     console.log(`     Path:   ${peer.path}`);

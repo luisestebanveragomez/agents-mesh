@@ -1,65 +1,52 @@
-import { readPeer, listPeers } from "../storage/peer-registry";
-import { enqueueMessage } from "../storage/message-queue";
-import { validateMessage } from "../security";
-import { logActivity } from "../storage/activity-log";
 import { getCurrentPeerId } from "../lifecycle";
-import { Message, MessageCategory } from "../../shared/types";
+import { brokerFetch } from "../../broker/launcher";
+import { BrokerPeer, BrokerMessage } from "../../broker/types";
+import { validateMessage } from "../security";
 import { generateId, now, expiresAt } from "../../shared/utils";
 import { TTL_S } from "../../shared/constants";
 
 export async function peersNotifyTool(args: {
   target: string | string[];
   message: string;
-  category?: MessageCategory;
+  category?: string;
 }): Promise<object> {
   const selfId = getCurrentPeerId();
   if (!selfId) return { error: "No peer registrado" };
 
-  const self = await readPeer(selfId);
+  const peers = await brokerFetch<BrokerPeer[]>("/peers");
+  const self = peers.find(p => p.id === selfId);
   if (!self) return { error: "Peer no encontrado" };
 
-  // Resolver targets
-  let targetPeers = [];
+  let targets: BrokerPeer[] = [];
   if (args.target === "all") {
-    targetPeers = await listPeers({ exclude_self: true });
+    targets = peers.filter(p => p.id !== selfId);
   } else {
-    const targets = Array.isArray(args.target) ? args.target : [args.target];
-    const allPeers = await listPeers({ exclude_self: true });
-    for (const t of targets) {
-      const found = allPeers.find(p => p.id === t || p.role === t);
-      if (found) targetPeers.push(found);
-    }
+    const ts = Array.isArray(args.target) ? args.target : [args.target];
+    targets = peers.filter(p => ts.includes(p.id) || ts.includes(p.role));
   }
 
-  const deliveredTo: string[] = [];
-  for (const target of targetPeers) {
+  const delivered: string[] = [];
+  for (const target of targets) {
     const msgId = generateId("msg");
-    const msg: Message = {
-      id: msgId,
-      from: selfId,
-      from_role: self.role,
-      from_agent: self.agent,
-      to: target.id,
-      to_role: target.role,
-      type: "notify",
-      content: args.message,
-      metadata: {
-        category: args.category ?? "info",
-        reply_to: null,
-      },
-      created_at: now(),
-      expires_at: expiresAt(TTL_S * 4),
-      read_at: null,
-      responded_at: null,
-    };
-
-    const validation = validateMessage(msg);
+    const validation = validateMessage({
+      id: msgId, from: selfId, from_role: self.role, from_agent: self.agent as any,
+      to: target.id, to_role: target.role, type: "notify", content: args.message,
+      metadata: {}, created_at: now(), expires_at: expiresAt(TTL_S * 4),
+      read_at: null, responded_at: null,
+    });
     if (validation.valid) {
-      await enqueueMessage(msg);
-      deliveredTo.push(target.id);
-      await logActivity("message", `${selfId}→${target.id}`, "notify", args.message.slice(0, 100));
+      await brokerFetch("/message/send", {
+        method: "POST",
+        body: JSON.stringify({
+          id: msgId, from_id: selfId, from_role: self.role, from_agent: self.agent,
+          to_id: target.id, to_role: target.role, type: "notify",
+          content: args.message, metadata: JSON.stringify({ category: args.category ?? "info" }),
+          created_at: now(), expires_at: expiresAt(TTL_S * 4),
+        } as BrokerMessage),
+      });
+      delivered.push(target.id);
     }
   }
 
-  return { delivered_to: deliveredTo };
+  return { delivered_to: delivered };
 }

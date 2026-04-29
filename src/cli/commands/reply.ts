@@ -1,30 +1,27 @@
-import { writeResponse, markMessageRead } from "../../mcp/storage/message-queue";
-import { logActivity } from "../../mcp/storage/activity-log";
-import { readFile } from "fs/promises";
-import { join } from "path";
-import { MESSAGES_DIR } from "../../shared/constants";
+import { ensureBroker, brokerFetch } from "../../broker/launcher";
+import { getSessionPeer } from "../session";
+import { BrokerMessage } from "../../broker/types";
 
 export async function replyCommand(messageId: string, content: string): Promise<void> {
-  const { getSessionPeer } = await import("../session");
+  await ensureBroker();
   const self = await getSessionPeer();
-
   if (!self) {
-    console.error("❌ No estás registrado como peer. Ejecuta: claude-peers register");
+    console.error("❌ No estás registrado");
     process.exit(1);
   }
 
-  try {
-    const msgPath = join(MESSAGES_DIR, self.id, `${messageId}.msg`);
-    const raw = await readFile(msgPath, "utf-8");
-    const msg = JSON.parse(raw);
-
-    await markMessageRead(self.id, messageId);
-    await writeResponse(msg.from, messageId, content);
-    await logActivity("message", `${self.id}→${msg.from}`, "reply", content.slice(0, 100));
-
-    console.log(`✅ Respuesta enviada a ${msg.from_role}`);
-  } catch {
+  // Obtener mensajes pendientes para encontrar el mensaje original
+  const messages = await brokerFetch<BrokerMessage[]>(`/message/poll/${self.id}`);
+  const original = messages.find(m => m.id === messageId);
+  if (!original) {
     console.error(`❌ Mensaje no encontrado: ${messageId}`);
     process.exit(1);
   }
+
+  await brokerFetch(`/message/response/${original.from_id}/${messageId}`, {
+    method: "POST",
+    body: JSON.stringify({ content, from_id: self.id, from_role: self.role, from_agent: self.agent }),
+  });
+
+  console.log(`✅ Respuesta enviada a ${original.from_role}`);
 }

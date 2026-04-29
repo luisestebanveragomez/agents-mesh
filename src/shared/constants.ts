@@ -17,3 +17,7 @@ export const DASHBOARD_PORT = Number(process.env.CLAUDE_PEERS_DASHBOARD_PORT) ||
 export const DEAD_PEER_THRESHOLD_S = 60;
 export const MAX_MESSAGE_BYTES     = 10_000;
 export const RATE_LIMIT_PER_MIN    = 30;
+
+export const BROKER_PORT   = Number(process.env.CLAUDE_PEERS_BROKER_PORT) || 7899;
+export const BROKER_URL    = `http://localhost:${BROKER_PORT}`;
+export const BROKER_POLL_MS = 1_000;
