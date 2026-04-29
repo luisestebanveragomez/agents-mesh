@@ -1,9 +1,6 @@
-import { readFile } from "fs/promises";
-import { join } from "path";
-import { MESSAGES_DIR } from "../../shared/constants";
 import { getCurrentPeerId } from "../lifecycle";
-import { writeResponse, markMessageRead } from "../storage/message-queue";
-import { logActivity } from "../storage/activity-log";
+import { brokerFetch } from "../../broker/launcher";
+import { getPendingMessages } from "../lifecycle";
 
 export async function peersReplyTool(args: {
   message_id: string;
@@ -12,17 +9,24 @@ export async function peersReplyTool(args: {
   const selfId = getCurrentPeerId();
   if (!selfId) return { error: "No peer registrado" };
 
-  try {
-    const msgPath = join(MESSAGES_DIR, selfId, `${args.message_id}.msg`);
-    const raw = await readFile(msgPath, "utf-8");
-    const msg = JSON.parse(raw);
+  // Buscar el mensaje en los pendientes para saber el from
+  const pending = getPendingMessages();
+  const original = pending.find(m => m.id === args.message_id);
+  if (!original) return { error: "Mensaje no encontrado o ya respondido", message_id: args.message_id };
 
-    await markMessageRead(selfId, args.message_id);
-    await writeResponse(msg.from, args.message_id, args.content);
-    await logActivity("message", `${selfId}→${msg.from}`, "reply", args.content.slice(0, 100));
+  // Obtener info del peer actual del broker
+  const peers = await brokerFetch<{ id: string; role: string; agent: string }[]>("/peers");
+  const self = peers.find(p => p.id === selfId);
 
-    return { sent: true, to: msg.from };
-  } catch {
-    return { error: "Mensaje no encontrado", message_id: args.message_id };
-  }
+  await brokerFetch(`/message/response/${original.from_id}/${args.message_id}`, {
+    method: "POST",
+    body: JSON.stringify({
+      content: args.content,
+      from_id: selfId,
+      from_role: self?.role ?? "unknown",
+      from_agent: self?.agent ?? "unknown",
+    }),
+  });
+
+  return { sent: true, to: original.from_id };
 }

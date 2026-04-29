@@ -1,25 +1,22 @@
-import { getCurrentPeerId } from "../lifecycle";
-import { readPendingMessages, markMessageRead } from "../storage/message-queue";
+import { getPendingMessages, clearPendingMessages } from "../lifecycle";
 import { formatForAgent } from "../security";
+import { BrokerMessage } from "../../broker/types";
 
 export async function peersCheckTool(): Promise<object> {
-  const selfId = getCurrentPeerId();
-  if (!selfId) return { pending: [] };
+  const messages = [...getPendingMessages()];
+  clearPendingMessages();
 
-  const messages = await readPendingMessages(selfId);
-
-  // Marcar todos como leídos
-  for (const msg of messages) {
-    await markMessageRead(selfId, msg.id);
-  }
-
-  // Formatear para el agente
   const formatted = messages.map(msg => ({
     id: msg.id,
     from: msg.from_role,
     from_agent: msg.from_agent,
     type: msg.type,
-    content: formatForAgent(msg),
+    content: formatForAgent({
+      id: msg.id, from: msg.from_id, from_role: msg.from_role, from_agent: msg.from_agent as any,
+      to: msg.to_id, to_role: msg.to_role, type: msg.type as any, content: msg.content,
+      metadata: {}, created_at: msg.created_at, expires_at: msg.expires_at,
+      read_at: null, responded_at: null,
+    }),
     created_at: msg.created_at,
   }));
 
