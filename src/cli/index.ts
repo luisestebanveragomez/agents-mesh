@@ -82,7 +82,8 @@ async function main() {
     }
 
     case "dashboard": {
-      console.log("🚧 Dashboard en desarrollo (Sprint 5)");
+      const { dashboardCommand } = await import("./commands/dashboard");
+      await dashboardCommand();
       break;
     }
 
