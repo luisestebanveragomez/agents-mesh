@@ -277,7 +277,18 @@
       } catch {}
     }
 
-    // SSE para updates de peers
+    async function fetchPeers() {
+      try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        updateStats(data);
+        updateGraph(data.peers ?? []);
+        renderPeerCards(data.peers ?? []);
+        lastPeers = data.peers ?? [];
+      } catch {}
+    }
+
+    // SSE para updates de peers (con fallback a polling)
     function connectSSE() {
       const es = new EventSource('/api/stream');
       es.onmessage = (e) => {
@@ -290,15 +301,18 @@
         } catch {}
       };
       es.onerror = () => {
-        setTimeout(connectSSE, 3000); // reconectar en 3s
+        es.close();
+        setTimeout(connectSSE, 3000);
       };
     }
 
     // Init
     document.addEventListener('DOMContentLoaded', () => {
       initGraph();
+      fetchPeers(); // carga inmediata via polling
       connectSSE();
       fetchActivity();
+      setInterval(fetchPeers, 2000);    // polling de respaldo
       setInterval(fetchActivity, 2000);
     });
   </script>
