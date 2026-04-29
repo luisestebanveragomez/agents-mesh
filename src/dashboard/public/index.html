@@ -469,10 +469,14 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       initGraph();
-      fetchPeers();
-      connectSSE();
-      fetchActivity();
-      fetchConnections();
+      // Esperar un tick para que el CSS aplique el height antes de que Cytoscape mida el contenedor
+      requestAnimationFrame(() => {
+        cy.resize();
+        fetchPeers();
+        fetchConnections();
+        fetchActivity();
+        connectSSE();
+      });
       setInterval(fetchPeers, 2000);
       setInterval(fetchConnections, 3000);
       setInterval(fetchActivity, 2000);
