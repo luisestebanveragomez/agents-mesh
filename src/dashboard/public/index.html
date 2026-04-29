@@ -25,12 +25,12 @@
     body { background: var(--bg-main); color: var(--text-primary); font-family: 'SF Mono', 'Fira Code', monospace; margin: 0; }
 
     #graph {
-      width: 100%; height: 340px;
+      width: 100%; height: 380px;
       background: var(--bg-graph);
       border-radius: 10px;
       border: 1px solid var(--border);
       background-image: radial-gradient(circle, #1e293b 1px, transparent 1px);
-      background-size: 24px 24px;
+      background-size: 28px 28px;
     }
 
     .card {
@@ -187,19 +187,21 @@
               'background-fit': 'contain',
               'background-clip': 'none',
               'background-opacity': 0,
+              'background-width': '36px',
+              'background-height': '36px',
               'border-width': 0,
               'label': 'data(label)',
-              'color': '#94a3b8',
+              'color': '#64748b',
               'text-valign': 'bottom',
               'text-halign': 'center',
-              'text-margin-y': 10,
-              'font-size': '10px',
+              'text-margin-y': 4,
+              'font-size': '9px',
               'font-weight': 'bold',
               'font-family': 'monospace',
-              'width': 64,
-              'height': 64,
-              'text-wrap': 'wrap',
-              'text-max-width': '100px',
+              'width': 40,
+              'height': 40,
+              'text-wrap': 'ellipsis',
+              'text-max-width': '90px',
             }
           },
           {
@@ -290,9 +292,9 @@
       const layout = peers.length <= 2 ? 'grid' : 'cose';
       cy.layout({
         name: layout,
-        padding: 40,
+        padding: 60,
         animate: false,
-        ...(layout === 'cose' ? { nodeRepulsion: 8000, idealEdgeLength: 120 } : { rows: 2 }),
+        ...(layout === 'cose' ? { nodeRepulsion: 12000, idealEdgeLength: 160, nodeOverlap: 80 } : { rows: 1 }),
       }).run();
     }
 
