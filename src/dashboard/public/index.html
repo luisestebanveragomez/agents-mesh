@@ -287,12 +287,14 @@
         }
       });
 
-      const layout = peers.length <= 2 ? 'grid' : 'cose';
       cy.layout({
-        name: layout,
-        padding: 60,
+        name: 'cose',
+        padding: 80,
         animate: false,
-        ...(layout === 'cose' ? { nodeRepulsion: 12000, idealEdgeLength: 160, nodeOverlap: 80 } : { rows: 1 }),
+        nodeRepulsion: 20000,
+        idealEdgeLength: 180,
+        nodeOverlap: 100,
+        randomize: false,
       }).run();
     }
 
