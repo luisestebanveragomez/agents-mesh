@@ -6,6 +6,9 @@ import { peersListTool } from "./tools/peers-list";
 import { peersStatusTool } from "./tools/peers-status";
 import { peersAskTool } from "./tools/peers-ask";
 import { peersReplyTool } from "./tools/peers-reply";
+import { peersNotifyTool } from "./tools/peers-notify";
+import { peersSearchTool } from "./tools/peers-search";
+import { peersCheckTool } from "./tools/peers-check";
 
 async function main() {
   await startPeer();
@@ -75,6 +78,39 @@ async function main() {
           },
         },
       },
+      {
+        name: "peers_notify",
+        description: "Envía una notificación a uno o varios peers sin esperar respuesta",
+        inputSchema: {
+          type: "object",
+          required: ["target", "message"],
+          properties: {
+            target:   { type: "string", description: "ID del peer, role, array de ids/roles, o 'all'" },
+            message:  { type: "string", description: "El mensaje a enviar" },
+            category: { type: "string", enum: ["info", "warning", "change"], description: "Categoría del mensaje" },
+          },
+        },
+      },
+      {
+        name: "peers_search",
+        description: "Pregunta a todos los peers quién tiene contexto sobre un tema",
+        inputSchema: {
+          type: "object",
+          required: ["topic"],
+          properties: {
+            topic:           { type: "string", description: "El tema sobre el que buscar" },
+            timeout_seconds: { type: "number", description: "Timeout en segundos (default: 30)" },
+          },
+        },
+      },
+      {
+        name: "peers_check",
+        description: "Revisa si hay mensajes pendientes sin responder de otros peers",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
     ],
   }));
 
@@ -89,6 +125,9 @@ async function main() {
         case "peers_status": result = await peersStatusTool(args as any); break;
         case "peers_ask":    result = await peersAskTool(args as any);    break;
         case "peers_reply":  result = await peersReplyTool(args as any);  break;
+        case "peers_notify":  result = await peersNotifyTool(args as any);  break;
+        case "peers_search":  result = await peersSearchTool(args as any);  break;
+        case "peers_check":   result = await peersCheckTool();               break;
         default:
           return { content: [{ type: "text", text: `Tool desconocida: ${name}` }], isError: true };
       }
