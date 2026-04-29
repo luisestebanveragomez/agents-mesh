@@ -16,10 +16,11 @@ function createSSEStream(): ReadableStream {
   let interval: ReturnType<typeof setInterval>;
   return new ReadableStream({
     start(controller) {
+      const enc = new TextEncoder();
       const send = async () => {
         try {
           const stats = await brokerGet("/stats");
-          controller.enqueue(`data: ${JSON.stringify(stats)}\n\n`);
+          controller.enqueue(enc.encode(`data: ${JSON.stringify(stats)}\n\n`));
         } catch {}
       };
       send();
