@@ -228,11 +228,18 @@
             }
           },
           {
-            selector: 'node[?hasColor]',
+            selector: 'node[icon = "none"]',
             style: {
               'background-color': 'data(color)',
               'background-opacity': 1,
+              'background-image': 'none',
               'border-width': 0,
+              'color': '#fff',
+              'text-valign': 'center',
+              'text-halign': 'center',
+              'text-margin-y': 0,
+              'label': 'data(initials)',
+              'font-size': '14px',
             }
           },
           {
@@ -301,10 +308,11 @@
         const color = AGENT_COLORS[peer.agent] ?? '#64748b';
         const icon = AGENT_ICONS[peer.agent] ?? 'none';
         const bgcolor = icon !== 'none' ? 'transparent' : color;
+        const initials = (AGENT_LABELS[peer.agent] ?? '?');
         if (graphIds.has(peer.id)) {
-          cy.$(`#${peer.id}`).data({ label, status: peer.status, color, bgcolor, icon });
+          cy.$(`#${peer.id}`).data({ label, status: peer.status, color, bgcolor, icon, initials });
         } else {
-          cy.add({ data: { id: peer.id, label, status: peer.status, color, bgcolor, icon } });
+          cy.add({ data: { id: peer.id, label, status: peer.status, color, bgcolor, icon, initials } });
         }
       }
 
