@@ -117,6 +117,14 @@
       'unknown':      '?',
     };
 
+    const AGENT_ICONS = {
+      'claude-code': 'https://claude.ai/favicon.ico',
+      'gemini-cli':  'https://geminicli.com/favicon.ico',
+      'opencode':    'https://opencode.ai/favicon-96x96-v3.png',
+      'copilot':     'https://img.icons8.com/3d-fluency/1200/github-copilot.jpg',
+      'codex':       'https://a.storyblok.com/f/310467/816x816/de8be483d3/codex-app.png',
+    };
+
     let cy = null;
     let lastPeers = [];
 
@@ -128,10 +136,14 @@
             selector: 'node',
             style: {
               'background-color': 'data(color)',
+              'background-image': 'data(icon)',
+              'background-fit': 'cover',
+              'background-clip': 'node',
               'label': 'data(label)',
               'color': '#ffffff',
-              'text-valign': 'center',
+              'text-valign': 'bottom',
               'text-halign': 'center',
+              'text-margin-y': 6,
               'font-size': '10px',
               'font-weight': 'bold',
               'font-family': 'monospace',
@@ -182,12 +194,13 @@
 
       // Agregar/actualizar nodos
       for (const peer of peers) {
-        const agentLabel = AGENT_LABELS[peer.agent] ?? '?';
-        const label = `${agentLabel}\n${peer.role}`;
+        const label = peer.role;
+        const color = AGENT_COLORS[peer.agent] ?? '#64748b';
+        const icon = AGENT_ICONS[peer.agent] ?? '';
         if (graphIds.has(peer.id)) {
-          cy.$(`#${peer.id}`).data({ label, status: peer.status, color: AGENT_COLORS[peer.agent] ?? '#64748b' });
+          cy.$(`#${peer.id}`).data({ label, status: peer.status, color, icon });
         } else {
-          cy.add({ data: { id: peer.id, label, status: peer.status, color: AGENT_COLORS[peer.agent] ?? '#64748b' } });
+          cy.add({ data: { id: peer.id, label, status: peer.status, color, icon } });
         }
       }
 
@@ -210,8 +223,10 @@
           <div class="peer-card">
             <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-2">
-                <div style="background:${color};color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;font-family:monospace">
-                  ${AGENT_LABELS[peer.agent] ?? '?'}
+                <div style="background:${color};width:28px;height:28px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                  ${AGENT_ICONS[peer.agent]
+                    ? `<img src="${AGENT_ICONS[peer.agent]}" style="width:100%;height:100%;object-fit:cover" />`
+                    : `<span style="color:#fff;font-size:11px;font-weight:bold;font-family:monospace">${AGENT_LABELS[peer.agent] ?? '?'}</span>`}
                 </div>
                 <span class="font-semibold text-sm">${peer.role}</span>
               </div>
