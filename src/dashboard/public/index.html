@@ -329,15 +329,17 @@
     }
 
     function renderPeerCards(peers) {
+      // Orden estable por fecha de inicio para que no cambie entre updates
+      const sorted = [...peers].sort((a, b) => a.started_at.localeCompare(b.started_at));
       const container = document.getElementById('peer-cards');
-      if (peers.length === 0) {
+      if (sorted.length === 0) {
         container.innerHTML = '';
         document.getElementById('no-peers').style.display = 'block';
         return;
       }
       document.getElementById('no-peers').style.display = 'none';
 
-      container.innerHTML = peers.map(peer => {
+      container.innerHTML = sorted.map(peer => {
         const color = AGENT_COLORS[peer.agent] ?? '#64748b';
         const iconHtml = AGENT_ICONS[peer.agent]
           ? `<img src="${AGENT_ICONS[peer.agent]}" style="width:32px;height:32px;object-fit:contain;flex-shrink:0" />`
