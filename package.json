@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Multi-agent communication via filesystem for AI coding agents",
   "type": "module",
+  "bin": {
+    "claude-peers": "src/cli/index.ts"
+  },
   "scripts": {
     "dev": "bun src/mcp/server.ts",
     "test": "bun test",
