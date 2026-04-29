@@ -11,7 +11,7 @@ export const ACTIVITY_LOG   = join(DATA_DIR, "activity.log");
 
 export const POLL_MS        = Number(process.env.CLAUDE_PEERS_POLL_MS)        || 2_000;
 export const HEARTBEAT_MS   = Number(process.env.CLAUDE_PEERS_HEARTBEAT_MS)   || 15_000;
-export const TTL_S          = Number(process.env.CLAUDE_PEERS_TTL_S)          || 30;
+export const TTL_S          = Number(process.env.CLAUDE_PEERS_TTL_S)          || 120;
 export const DASHBOARD_PORT = Number(process.env.CLAUDE_PEERS_DASHBOARD_PORT) || 5723;
 
 export const DEAD_PEER_THRESHOLD_S = 60;

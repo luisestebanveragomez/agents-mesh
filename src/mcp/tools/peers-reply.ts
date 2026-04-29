@@ -1,6 +1,5 @@
-import { getCurrentPeerId } from "../lifecycle";
+import { getCurrentPeerId, getDeliveredMessage, removeDeliveredMessage } from "../lifecycle";
 import { brokerFetch } from "../../broker/launcher";
-import { getPendingMessages } from "../lifecycle";
 
 export async function peersReplyTool(args: {
   message_id: string;
@@ -9,12 +8,10 @@ export async function peersReplyTool(args: {
   const selfId = getCurrentPeerId();
   if (!selfId) return { error: "No peer registrado" };
 
-  // Buscar el mensaje en los pendientes para saber el from
-  const pending = getPendingMessages();
-  const original = pending.find(m => m.id === args.message_id);
+  // Buscar en los mensajes ya entregados al agente
+  const original = getDeliveredMessage(args.message_id);
   if (!original) return { error: "Mensaje no encontrado o ya respondido", message_id: args.message_id };
 
-  // Obtener info del peer actual del broker
   const peers = await brokerFetch<{ id: string; role: string; agent: string }[]>("/peers");
   const self = peers.find(p => p.id === selfId);
 
@@ -28,5 +25,6 @@ export async function peersReplyTool(args: {
     }),
   });
 
+  removeDeliveredMessage(args.message_id);
   return { sent: true, to: original.from_id };
 }

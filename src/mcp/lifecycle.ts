@@ -12,6 +12,9 @@ let cleanupDone = false;
 // Cola de mensajes pendientes detectados por el polling
 const pendingMessages: BrokerMessage[] = [];
 
+// Mensajes ya entregados al agente vía middleware, esperando peers_reply
+const deliveredMessages = new Map<string, BrokerMessage>();
+
 export function getCurrentPeerId(): string | null {
   return currentPeerId;
 }
@@ -20,8 +23,24 @@ export function getPendingMessages(): BrokerMessage[] {
   return pendingMessages;
 }
 
-export function clearPendingMessages(): void {
+export function getDeliveredMessage(id: string): BrokerMessage | undefined {
+  return deliveredMessages.get(id);
+}
+
+export function removeDeliveredMessage(id: string): void {
+  deliveredMessages.delete(id);
+}
+
+export function moveToDelivered(): void {
+  // Mueve mensajes de pendingMessages a deliveredMessages y limpia la cola
+  for (const msg of pendingMessages) {
+    deliveredMessages.set(msg.id, msg);
+  }
   pendingMessages.length = 0;
+}
+
+export function clearPendingMessages(): void {
+  moveToDelivered();
 }
 
 export async function startPeer(): Promise<string> {
