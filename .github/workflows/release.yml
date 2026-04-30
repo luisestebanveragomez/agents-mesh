@@ -72,34 +72,3 @@ jobs:
             *.tar.gz
             *.sha256
 
-  update-formula:
-    needs: release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: agents-mesh-darwin-arm64
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: agents-mesh-darwin-x64
-
-      - name: Update Formula with new SHAs
-        run: |
-          ARM64_SHA=$(cat agents-mesh-darwin-arm64.tar.gz.sha256 | awk '{print $1}')
-          X64_SHA=$(cat agents-mesh-darwin-x64.tar.gz.sha256 | awk '{print $1}')
-          VERSION=${GITHUB_REF_NAME#v}
-
-          sed -i \
-            -e "s|__VERSION__|${VERSION}|g" \
-            -e "s|__ARM64_SHA__|${ARM64_SHA}|g" \
-            -e "s|__X64_SHA__|${X64_SHA}|g" \
-            Formula/agents-mesh.rb
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/agents-mesh.rb
-          git commit -m "chore: update formula for ${GITHUB_REF_NAME}" || true
-          git push origin HEAD:main || true
