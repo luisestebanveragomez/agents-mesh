@@ -8,8 +8,8 @@ import { writeFileSync, mkdirSync, rmSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
-// C4: use ~/.claude-peers/peers/ instead of /tmp/ to avoid world-writable symlink attacks
-const PEER_MAP_DIR = join(homedir(), ".claude-peers", "peers");
+// C4: use ~/.agents-mesh/peers/ instead of /tmp/ to avoid world-writable symlink attacks
+const PEER_MAP_DIR = join(homedir(), ".agents-mesh", "peers");
 
 function writePeerMap(peerId: string): void {
   try {

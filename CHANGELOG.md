@@ -14,15 +14,15 @@
 - `peers_check` — revisa mensajes pendientes
 
 **CLI Wrapper**
-- `claude-peers list` — lista peers
-- `claude-peers ask <target> <msg>` — pregunta
-- `claude-peers reply <id> <msg>` — responde
-- `claude-peers notify <msg>` — broadcast
-- `claude-peers check` — mensajes pendientes
-- `claude-peers register` — registra agente sin MCP
-- `claude-peers status` — actualiza estado
-- `claude-peers doctor` — diagnóstico
-- `claude-peers dashboard` — dashboard web
+- `agents-mesh list` — lista peers
+- `agents-mesh ask <target> <msg>` — pregunta
+- `agents-mesh reply <id> <msg>` — responde
+- `agents-mesh notify <msg>` — broadcast
+- `agents-mesh check` — mensajes pendientes
+- `agents-mesh register` — registra agente sin MCP
+- `agents-mesh status` — actualiza estado
+- `agents-mesh doctor` — diagnóstico
+- `agents-mesh dashboard` — dashboard web
 
 **Dashboard**
 - Grafo de peers en tiempo real (Cytoscape.js)

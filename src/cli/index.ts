@@ -21,7 +21,7 @@ async function main() {
     case "ask": {
       const [target, ...questionParts] = rest;
       if (!target || questionParts.length === 0) {
-        console.error("Uso: claude-peers ask <target> <pregunta>");
+        console.error("Uso: agents-mesh ask <target> <pregunta>");
         process.exit(1);
       }
       await askCommand(target, questionParts.join(" "));
@@ -31,7 +31,7 @@ async function main() {
     case "reply": {
       const [msgId, ...contentParts] = rest;
       if (!msgId || contentParts.length === 0) {
-        console.error("Uso: claude-peers reply <msg_id> <respuesta>");
+        console.error("Uso: agents-mesh reply <msg_id> <respuesta>");
         process.exit(1);
       }
       await replyCommand(msgId, contentParts.join(" "));
@@ -40,7 +40,7 @@ async function main() {
 
     case "notify": {
       if (rest.length === 0) {
-        console.error("Uso: claude-peers notify <mensaje>");
+        console.error("Uso: agents-mesh notify <mensaje>");
         process.exit(1);
       }
       await notifyCommand(rest.join(" "));
@@ -53,7 +53,7 @@ async function main() {
     }
 
     case "status": {
-      // claude-peers status --task "trabajando en X" --status working
+      // agents-mesh status --task "trabajando en X" --status working
       const opts: Record<string, string> = {};
       for (let i = 0; i < rest.length; i++) {
         if (rest[i] === "--task" && rest[i + 1]) opts.task = rest[++i];
@@ -70,7 +70,7 @@ async function main() {
     }
 
     case "register": {
-      // claude-peers register [--agent gemini-cli] [--role backend] [--detach]
+      // agents-mesh register [--agent gemini-cli] [--role backend] [--detach]
       const opts: Record<string, string | boolean> = {};
       for (let i = 0; i < rest.length; i++) {
         if (rest[i] === "--agent" && rest[i + 1]) opts.agent = rest[++i];
@@ -87,10 +87,32 @@ async function main() {
       break;
     }
 
-    default: {
-      console.log(`claude-peers v0.1.0
+    case "install": {
+      const { installCommand } = await import("./commands/install");
+      const [agent, ...installRest] = rest;
+      const opts = { global: installRest.includes("--global"), local: installRest.includes("--local") };
+      await installCommand(agent, opts);
+      break;
+    }
 
-Uso: claude-peers <comando> [opciones]
+    case "uninstall": {
+      const { uninstallCommand } = await import("./commands/install");
+      const [agent, ...uninstallRest] = rest;
+      const opts = { global: uninstallRest.includes("--global"), local: uninstallRest.includes("--local") };
+      await uninstallCommand(agent, opts);
+      break;
+    }
+
+    case "installed": {
+      const { installStatusCommand } = await import("./commands/install");
+      await installStatusCommand(rest[0]);
+      break;
+    }
+
+    default: {
+      console.log(`agents-mesh v0.1.0
+
+Uso: agents-mesh <comando> [opciones]
 
 Comandos:
   list                              Lista peers activos
@@ -102,6 +124,11 @@ Comandos:
   status [--task <t>] [--status <s>]  Actualiza estado
   doctor                            Diagnóstico del sistema
   dashboard                         Abre el dashboard
+  install <agent> [--global|--local]  Instala en un agente
+  uninstall <agent> [--global|--local] Desinstala de un agente
+  installed [agent]                   Muestra estado de instalación
+
+Agents:  claude-code, gemini-cli, opencode, copilot, codex
 `);
     }
   }

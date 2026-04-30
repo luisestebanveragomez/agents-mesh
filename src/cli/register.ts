@@ -7,7 +7,7 @@ import { writeFile } from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
 
-const SESSION_FILE = join(homedir(), ".claude-peers-session.json");
+const SESSION_FILE = join(homedir(), ".agents-mesh-session.json");
 
 export async function register(options: {
   agent?: string;
@@ -16,7 +16,7 @@ export async function register(options: {
 }): Promise<void> {
   await ensureBroker();
 
-  const agentName = options.agent ?? process.env.CLAUDE_PEERS_AGENT ?? "unknown";
+  const agentName = options.agent ?? process.env.AGENTS_MESH_AGENT ?? "unknown";
   const role = options.role ?? await inferRole(process.cwd());
   const id = generateId("peer");
 
@@ -26,7 +26,7 @@ export async function register(options: {
     path: process.cwd(),
     pid: process.pid,
     agent: agentName,
-    agent_version: process.env.CLAUDE_PEERS_AGENT_VERSION ?? "unknown",
+    agent_version: process.env.AGENTS_MESH_AGENT_VERSION ?? "unknown",
     started_at: now(),
     last_heartbeat: now(),
     status: "idle",

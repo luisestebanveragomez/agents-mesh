@@ -5,11 +5,11 @@ const path = require("path");
 const http = require("http");
 const { execSync } = require("child_process");
 
-// C4: use ~/.claude-peers/ instead of /tmp/ to avoid world-writable symlink attacks
-const PEER_MAP_DIR = path.join(os.homedir(), ".claude-peers", "peers");
-const BROKER_PORT = process.env.CLAUDE_PEERS_BROKER_PORT || 7899;
+// C4: use ~/.agents-mesh/ instead of /tmp/ to avoid world-writable symlink attacks
+const PEER_MAP_DIR = path.join(os.homedir(), ".agents-mesh", "peers");
+const BROKER_PORT = process.env.AGENTS_MESH_BROKER_PORT || 7899;
 // L6: move log out of /tmp/ to avoid symlink attacks on the log file
-const LOG_DIR = path.join(os.homedir(), ".claude-peers", "logs");
+const LOG_DIR = path.join(os.homedir(), ".agents-mesh", "logs");
 const LOG = path.join(LOG_DIR, "hook.log");
 
 function ensureLogDir() {

@@ -23,7 +23,7 @@ export async function checkCommand(): Promise<void> {
     console.log(`ID: ${msg.id}`);
     console.log(`Tipo: ${msg.type}`);
     console.log(`\n${msg.content}\n`);
-    console.log(`Para responder: claude-peers reply ${msg.id} "tu respuesta"`);
+    console.log(`Para responder: agents-mesh reply ${msg.id} "tu respuesta"`);
     console.log();
   }
 }

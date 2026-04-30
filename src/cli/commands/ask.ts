@@ -8,7 +8,7 @@ export async function askCommand(target: string, question: string, timeoutSec = 
   await ensureBroker();
   const self = await getSessionPeer();
   if (!self) {
-    console.error("❌ No estás registrado. Ejecuta: claude-peers register");
+    console.error("❌ No estás registrado. Ejecuta: agents-mesh register");
     process.exit(1);
   }
 

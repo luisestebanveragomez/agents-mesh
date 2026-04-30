@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import { getDb, closeDb } from "./db";
 import { BrokerPeer, BrokerMessage } from "./types";
 
-const BROKER_PORT = Number(process.env.CLAUDE_PEERS_BROKER_PORT) || 7899;
+const BROKER_PORT = Number(process.env.AGENTS_MESH_BROKER_PORT) || 7899;
 const DEAD_PEER_THRESHOLD_S = 60;
 const PEER_ID_RE = /^peer_[a-zA-Z0-9_-]{1,64}$/; // L2: peer ID format validation
 const MAX_TTL_MS = 24 * 60 * 60 * 1000;           // L5: max 24h TTL
@@ -305,7 +305,7 @@ const server = serve({
   fetch: handleRequest,
 });
 
-console.log(`claude-peers broker v0.1.0 running on port ${server.port}`);
+console.log(`agents-mesh broker v0.1.0 running on port ${server.port}`);
 
 // Cleanup al salir
 process.on("SIGTERM", () => { closeDb(); process.exit(0); });

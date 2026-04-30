@@ -4,7 +4,7 @@ import { homedir } from "os";
 import { brokerFetch } from "../broker/launcher";
 import { BrokerPeer } from "../broker/types";
 
-const SESSION_FILE = join(homedir(), ".claude-peers-session.json");
+const SESSION_FILE = join(homedir(), ".agents-mesh-session.json");
 
 export async function getSessionPeer(): Promise<BrokerPeer | null> {
   try {

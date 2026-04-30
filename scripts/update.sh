@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_DIR="${HOME}/.claude-peers"
+INSTALL_DIR="${HOME}/.agents-mesh"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 GREEN='\033[0;32m'
@@ -10,7 +10,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 echo ""
-echo "🔄 Actualizando claude-peers..."
+echo "🔄 Actualizando agents-mesh..."
 echo ""
 
 # Obtener versión actual
@@ -42,11 +42,11 @@ bun install --silent
 echo -e "${GREEN}✅ Dependencias actualizadas${NC}"
 
 echo -e "${BLUE}[3/3] Actualizando MCP server...${NC}"
-claude mcp remove claude-peers 2>/dev/null || true
+claude mcp remove agents-mesh 2>/dev/null || true
 claude mcp add \
   --scope user \
   --transport stdio \
-  claude-peers \
+  agents-mesh \
   -- bun "${INSTALL_DIR}/src/mcp/server.ts"
 echo -e "${GREEN}✅ MCP server actualizado${NC}"
 

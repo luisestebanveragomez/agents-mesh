@@ -3,7 +3,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { mkdirSync } from "fs";
 
-const DB_PATH = process.env.CLAUDE_PEERS_DB ?? join(homedir(), ".claude-peers.db");
+const DB_PATH = process.env.AGENTS_MESH_DB ?? join(homedir(), ".agents-mesh.db");
 
 let _db: Database | null = null;
 

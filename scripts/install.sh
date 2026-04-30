@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_DIR="${HOME}/.claude-peers"
-DATA_DIR="${HOME}/.claude-peers-data"
+INSTALL_DIR="${HOME}/.agents-mesh"
+DATA_DIR="${HOME}/.agents-mesh-data"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 GREEN='\033[0;32m'
@@ -17,7 +17,7 @@ rollback() {
   echo -e "\n${RED}❌ Error en la instalación, revirtiendo...${NC}"
   for step in "${COMPLETED_STEPS[@]}"; do
     case "$step" in
-      "mcp")        claude mcp remove claude-peers 2>/dev/null || true ;;
+      "mcp")        claude mcp remove agents-mesh 2>/dev/null || true ;;
       "install_dir") rm -rf "$INSTALL_DIR" ;;
       "data_dir")   rm -rf "$DATA_DIR" ;;
     esac
@@ -86,7 +86,7 @@ register_mcp() {
   claude mcp add \
     --scope user \
     --transport stdio \
-    claude-peers \
+    agents-mesh \
     -- bun "${INSTALL_DIR}/src/mcp/server.ts"
 
   COMPLETED_STEPS+=("mcp")
@@ -96,7 +96,7 @@ register_mcp() {
 verify() {
   echo -e "${BLUE}[5/5] Verificando instalación...${NC}"
 
-  claude mcp list 2>/dev/null | grep -q "claude-peers" || {
+  claude mcp list 2>/dev/null | grep -q "agents-mesh" || {
     echo -e "${RED}❌ MCP no aparece en la lista${NC}"
     return 1
   }

@@ -2,8 +2,8 @@ import { describe, test, expect, beforeEach, mock } from "bun:test";
 import { join } from "path";
 import { tmpdir } from "os";
 
-process.env.CLAUDE_PEERS_DATA = join(tmpdir(), "claude-peers-tools-test-" + Date.now());
-process.env.CLAUDE_PEERS_TTL_S = "5";
+process.env.AGENTS_MESH_DATA = join(tmpdir(), "agents-mesh-tools-test-" + Date.now());
+process.env.AGENTS_MESH_TTL_S = "5";
 
 import { now } from "../../src/shared/utils";
 import { Peer } from "../../src/shared/types";

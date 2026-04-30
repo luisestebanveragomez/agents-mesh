@@ -4,9 +4,9 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 // Usar DB temporal para tests
-const TEST_DB = join(tmpdir(), `claude-peers-test-${Date.now()}.db`);
-process.env.CLAUDE_PEERS_DB = TEST_DB;
-process.env.CLAUDE_PEERS_BROKER_PORT = "17899";
+const TEST_DB = join(tmpdir(), `agents-mesh-test-${Date.now()}.db`);
+process.env.AGENTS_MESH_DB = TEST_DB;
+process.env.AGENTS_MESH_BROKER_PORT = "17899";
 
 const { getDb, closeDb } = await import("../../src/broker/db");
 

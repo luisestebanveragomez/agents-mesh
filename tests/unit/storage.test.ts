@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 
 // Sobrescribimos DATA_DIR para tests
-process.env.CLAUDE_PEERS_DATA = join(tmpdir(), "claude-peers-test-" + Date.now());
+process.env.AGENTS_MESH_DATA = join(tmpdir(), "agents-mesh-test-" + Date.now());
 
 // Importamos DESPUÉS de setear el env var
 const { writePeer, readPeer, deletePeer, listPeers, updateHeartbeat, cleanDeadPeers, ensureDirectories } =

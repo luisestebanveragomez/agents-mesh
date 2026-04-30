@@ -26,7 +26,7 @@ export async function doctorCommand(): Promise<void> {
   let mcpOk = false;
   try {
     const output = execSync("claude mcp list 2>/dev/null", { encoding: "utf-8" });
-    mcpOk = output.includes("claude-peers");
+    mcpOk = output.includes("agents-mesh");
   } catch {}
   console.log(`MCP registrado:     ${mcpOk ? "✅" : "❌"}`);
 

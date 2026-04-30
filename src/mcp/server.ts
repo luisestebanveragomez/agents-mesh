@@ -15,7 +15,7 @@ async function main() {
   await startPeer();
 
   const server = new Server(
-    { name: "claude-peers", version: "0.1.0" },
+    { name: "agents-mesh", version: "0.1.0" },
     { capabilities: { tools: {} } }
   );
 
