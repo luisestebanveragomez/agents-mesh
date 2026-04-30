@@ -1,7 +1,9 @@
 import { spawn } from "bun";
 import { join } from "path";
+import { existsSync } from "fs";
+import { execSync } from "child_process";
 
-const BROKER_PORT = Number(process.env.CLAUDE_PEERS_BROKER_PORT) || 7899;
+const BROKER_PORT = Number(process.env.AGENTS_MESH_BROKER_PORT) || 7899;
 const BROKER_URL = `http://localhost:${BROKER_PORT}`;
 
 // C3: per-peer auth token, set after successful register
@@ -9,25 +11,36 @@ let _peerToken: string | null = null;
 export function setPeerToken(token: string): void { _peerToken = token; }
 export function getPeerToken(): string | null { return _peerToken; }
 
+function getBrokerCommand(): string[] {
+  // 1. If running from compiled binary, use the same binary with "broker" subcommand
+  if (!process.argv[0]?.endsWith("bun") && !process.argv[0]?.includes("/bun")) {
+    return [process.execPath, "broker"];
+  }
+  // 2. If agents-mesh is in PATH, use it
+  try {
+    const binPath = execSync("which agents-mesh", { encoding: "utf-8" }).trim();
+    if (binPath) return [binPath, "broker"];
+  } catch {}
+  // 3. Fallback: bun + broker source file (dev mode)
+  const brokerPath = join(import.meta.dir, "server.ts");
+  if (existsSync(brokerPath)) return ["bun", brokerPath];
+  throw new Error("Cannot find agents-mesh binary or broker source");
+}
+
 export async function ensureBroker(): Promise<void> {
-  // Verificar si ya está corriendo
   try {
     const res = await fetch(`${BROKER_URL}/health`, { signal: AbortSignal.timeout(500) });
-    if (res.ok) return; // ya está corriendo
-  } catch {
-    // no está corriendo, arrancar
-  }
+    if (res.ok) return;
+  } catch {}
 
-  // Arrancar el broker como proceso independiente
-  const brokerPath = join(import.meta.dir, "server.ts");
-  const proc = spawn(["bun", brokerPath], {
+  const cmd = getBrokerCommand();
+  const proc = spawn(cmd, {
     stdout: "ignore",
     stderr: "ignore",
-    detached: true,   // independiente del proceso padre
+    detached: true,
   });
-  proc.unref();       // no bloquea el proceso padre
+  proc.unref();
 
-  // Esperar hasta que el broker esté listo (max 5s)
   const deadline = Date.now() + 5000;
   while (Date.now() < deadline) {
     await sleep(100);

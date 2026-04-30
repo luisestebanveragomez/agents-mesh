@@ -1,29 +1,54 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
-import { execSync } from "child_process";
 
 const AGENTS = ["claude-code", "gemini-cli", "opencode", "copilot", "codex"] as const;
 type Agent = typeof AGENTS[number];
+type Scope = "global" | "local";
 
 interface InstallOptions {
   global?: boolean;
   local?: boolean;
+  all?: boolean;
 }
 
-function getMcpServerPath(): string {
-  // Resolve the path to the MCP server entry point
-  const scriptPath = new URL(import.meta.url).pathname;
-  return join(dirname(dirname(dirname(scriptPath))), "mcp", "server.ts");
+const TRACKING_DIR = join(homedir(), ".agents-mesh");
+const TRACKING_FILE = join(TRACKING_DIR, "installs.json");
+
+// ── Tracking ───────────────────────────────────────────────────────────────────
+
+interface InstallRecord {
+  agent: string;
+  scope: Scope;
+  configPath: string;
+  installedAt: string;
 }
+
+function loadTracking(): InstallRecord[] {
+  if (!existsSync(TRACKING_FILE)) return [];
+  try { return JSON.parse(readFileSync(TRACKING_FILE, "utf-8")); } catch { return []; }
+}
+
+function saveTracking(records: InstallRecord[]): void {
+  mkdirSync(TRACKING_DIR, { recursive: true, mode: 0o700 });
+  writeFileSync(TRACKING_FILE, JSON.stringify(records, null, 2) + "\n", { encoding: "utf-8", mode: 0o600 });
+}
+
+function trackInstall(agent: string, scope: Scope, configPath: string): void {
+  const records = loadTracking().filter(r => !(r.agent === agent && r.scope === scope));
+  records.push({ agent, scope, configPath, installedAt: new Date().toISOString() });
+  saveTracking(records);
+}
+
+function untrackInstall(agent: string, scope: Scope): void {
+  saveTracking(loadTracking().filter(r => !(r.agent === agent && r.scope === scope)));
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function readJson(filePath: string): Record<string, unknown> {
   if (!existsSync(filePath)) return {};
-  try {
-    return JSON.parse(readFileSync(filePath, "utf-8"));
-  } catch {
-    return {};
-  }
+  try { return JSON.parse(readFileSync(filePath, "utf-8")); } catch { return {}; }
 }
 
 function writeJson(filePath: string, data: unknown): void {
@@ -39,258 +64,142 @@ function backup(filePath: string): void {
   }
 }
 
-function mcpServerEntry(serverPath: string) {
-  return {
-    command: "bun",
-    args: [serverPath],
-    env: {},
-  };
+function mcpEntry() {
+  return { command: "agents-mesh", args: ["mcp"] };
 }
 
-// ── Claude Code ────────────────────────────────────────────────────────────────
+function opencodeMcpEntry() {
+  return { type: "local", command: ["agents-mesh", "mcp"] };
+}
 
-function installClaudeCode(scope: "global" | "local", serverPath: string): void {
-  if (scope === "global") {
-    const configPath = join(homedir(), ".claude.json");
-    backup(configPath);
+// ── Config paths ───────────────────────────────────────────────────────────────
+
+function getConfigPath(agent: Agent, scope: Scope): string {
+  switch (agent) {
+    case "claude-code":
+      return scope === "global" ? join(homedir(), ".claude.json") : join(process.cwd(), ".mcp.json");
+    case "gemini-cli":
+      return scope === "global" ? join(homedir(), ".gemini", "settings.json") : join(process.cwd(), ".gemini", "settings.json");
+    case "opencode":
+      return scope === "global" ? join(homedir(), ".config", "opencode", "config.json") : join(process.cwd(), "opencode.config.json");
+    case "copilot":
+      return scope === "global"
+        ? join(homedir(), "Library", "Application Support", "Code", "User", "settings.json")
+        : join(process.cwd(), ".vscode", "settings.json");
+    case "codex":
+      return scope === "global" ? join(homedir(), ".codex", "config.json") : join(process.cwd(), "codex.json");
+  }
+}
+
+// ── Install per agent ──────────────────────────────────────────────────────────
+
+function installAgent(agent: Agent, scope: Scope): void {
+  const configPath = getConfigPath(agent, scope);
+  backup(configPath);
+  const config = readJson(configPath);
+
+  switch (agent) {
+    case "claude-code":
+    case "gemini-cli": {
+      const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
+      mcpServers["agents-mesh"] = mcpEntry();
+      config.mcpServers = mcpServers;
+      break;
+    }
+    case "opencode": {
+      const mcp = (config.mcp as Record<string, unknown>) ?? {};
+      const servers = (mcp.servers as Record<string, unknown>) ?? {};
+      servers["agents-mesh"] = opencodeMcpEntry();
+      mcp.servers = servers;
+      config.mcp = mcp;
+      break;
+    }
+    case "copilot": {
+      const servers = (config["github.copilot.chat.experimental.mcpServers"] as Record<string, unknown>) ?? {};
+      servers["agents-mesh"] = mcpEntry();
+      config["github.copilot.chat.experimental.mcpServers"] = servers;
+      break;
+    }
+    case "codex": {
+      const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
+      mcpServers["agents-mesh"] = mcpEntry();
+      config.mcpServers = mcpServers;
+      break;
+    }
+  }
+
+  writeJson(configPath, config);
+  trackInstall(agent, scope, configPath);
+  console.log(`  MCP server added to ${configPath}`);
+}
+
+// ── Uninstall per agent ────────────────────────────────────────────────────────
+
+function uninstallAgent(agent: Agent, scope: Scope): boolean {
+  const configPath = getConfigPath(agent, scope);
+  if (!existsSync(configPath)) { console.log(`  ${agent} (${scope}): nothing to remove.`); return false; }
+  backup(configPath);
+  const config = readJson(configPath);
+  let found = false;
+
+  switch (agent) {
+    case "claude-code":
+    case "gemini-cli":
+    case "codex": {
+      const mcpServers = config.mcpServers as Record<string, unknown> | undefined;
+      if (mcpServers?.["agents-mesh"]) { delete mcpServers["agents-mesh"]; config.mcpServers = mcpServers; found = true; }
+      break;
+    }
+    case "opencode": {
+      const servers = (config.mcp as Record<string, Record<string, unknown>> | undefined)?.servers;
+      if (servers?.["agents-mesh"]) { delete servers["agents-mesh"]; found = true; }
+      break;
+    }
+    case "copilot": {
+      const servers = config["github.copilot.chat.experimental.mcpServers"] as Record<string, unknown> | undefined;
+      if (servers?.["agents-mesh"]) { delete servers["agents-mesh"]; config["github.copilot.chat.experimental.mcpServers"] = servers; found = true; }
+      break;
+    }
+  }
+
+  if (found) {
+    writeJson(configPath, config);
+    untrackInstall(agent, scope);
+    console.log(`  Removed agents-mesh from ${configPath}`);
+  } else {
+    console.log(`  ${agent} (${scope}): agents-mesh not found in config.`);
+  }
+  return found;
+}
+
+// ── Status per agent ───────────────────────────────────────────────────────────
+
+function statusAgent(agent: Agent): void {
+  for (const scope of ["global", "local"] as Scope[]) {
+    const configPath = getConfigPath(agent, scope);
     const config = readJson(configPath);
-    const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
-    mcpServers["agents-mesh"] = mcpServerEntry(serverPath);
-    config.mcpServers = mcpServers;
-    writeJson(configPath, config);
-    console.log(`  MCP server added to ${configPath}`);
-  } else {
-    // Local: .mcp.json in current directory (Claude Code project-level config)
-    const configPath = join(process.cwd(), ".mcp.json");
-    backup(configPath);
-    const config = readJson(configPath);
-    const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
-    mcpServers["agents-mesh"] = mcpServerEntry(serverPath);
-    config.mcpServers = mcpServers;
-    writeJson(configPath, config);
-    console.log(`  MCP server added to ${configPath}`);
+    let installed = false;
+
+    switch (agent) {
+      case "claude-code":
+      case "gemini-cli":
+      case "codex":
+        installed = !!(config.mcpServers as Record<string, unknown> | undefined)?.["agents-mesh"];
+        break;
+      case "opencode":
+        installed = !!((config.mcp as Record<string, Record<string, unknown>> | undefined)?.servers?.["agents-mesh"]);
+        break;
+      case "copilot":
+        installed = !!(config["github.copilot.chat.experimental.mcpServers"] as Record<string, unknown> | undefined)?.["agents-mesh"];
+        break;
+    }
+
+    const label = scope === "global" ? "Global" : "Local ";
+    console.log(`  ${label} (${configPath}): ${installed ? "✓ installed" : "✗ not installed"}`);
   }
 }
 
-function uninstallClaudeCode(scope: "global" | "local"): void {
-  const configPath = scope === "global"
-    ? join(homedir(), ".claude.json")
-    : join(process.cwd(), ".mcp.json");
-  if (!existsSync(configPath)) {
-    console.log("  Nothing to remove.");
-    return;
-  }
-  backup(configPath);
-  const config = readJson(configPath);
-  const mcpServers = config.mcpServers as Record<string, unknown> | undefined;
-  if (mcpServers?.["agents-mesh"]) {
-    delete mcpServers["agents-mesh"];
-    config.mcpServers = mcpServers;
-    writeJson(configPath, config);
-    console.log(`  Removed agents-mesh from ${configPath}`);
-  } else {
-    console.log("  agents-mesh not found in config.");
-  }
-}
-
-function statusClaudeCode(): void {
-  const globalPath = join(homedir(), ".claude.json");
-  const localPath = join(process.cwd(), ".mcp.json");
-  const globalConfig = readJson(globalPath);
-  const localConfig = readJson(localPath);
-  const globalInstalled = !!(globalConfig.mcpServers as Record<string, unknown> | undefined)?.["agents-mesh"];
-  const localInstalled = !!(localConfig.mcpServers as Record<string, unknown> | undefined)?.["agents-mesh"];
-  console.log(`  Global (${globalPath}): ${globalInstalled ? "✓ installed" : "✗ not installed"}`);
-  console.log(`  Local  (${localPath}): ${localInstalled ? "✓ installed" : "✗ not installed"}`);
-}
-
-// ── Gemini CLI ─────────────────────────────────────────────────────────────────
-
-function installGeminiCli(scope: "global" | "local", serverPath: string): void {
-  const configPath = scope === "global"
-    ? join(homedir(), ".gemini", "settings.json")
-    : join(process.cwd(), ".gemini", "settings.json");
-  backup(configPath);
-  const config = readJson(configPath);
-  const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
-  mcpServers["agents-mesh"] = mcpServerEntry(serverPath);
-  config.mcpServers = mcpServers;
-  writeJson(configPath, config);
-  console.log(`  MCP server added to ${configPath}`);
-}
-
-function uninstallGeminiCli(scope: "global" | "local"): void {
-  const configPath = scope === "global"
-    ? join(homedir(), ".gemini", "settings.json")
-    : join(process.cwd(), ".gemini", "settings.json");
-  if (!existsSync(configPath)) { console.log("  Nothing to remove."); return; }
-  backup(configPath);
-  const config = readJson(configPath);
-  const mcpServers = config.mcpServers as Record<string, unknown> | undefined;
-  if (mcpServers?.["agents-mesh"]) {
-    delete mcpServers["agents-mesh"];
-    config.mcpServers = mcpServers;
-    writeJson(configPath, config);
-    console.log(`  Removed agents-mesh from ${configPath}`);
-  } else {
-    console.log("  agents-mesh not found in config.");
-  }
-}
-
-function statusGeminiCli(): void {
-  const globalPath = join(homedir(), ".gemini", "settings.json");
-  const localPath = join(process.cwd(), ".gemini", "settings.json");
-  const globalConfig = readJson(globalPath);
-  const localConfig = readJson(localPath);
-  const globalInstalled = !!(globalConfig.mcpServers as Record<string, unknown> | undefined)?.["agents-mesh"];
-  const localInstalled = !!(localConfig.mcpServers as Record<string, unknown> | undefined)?.["agents-mesh"];
-  console.log(`  Global (${globalPath}): ${globalInstalled ? "✓ installed" : "✗ not installed"}`);
-  console.log(`  Local  (${localPath}): ${localInstalled ? "✓ installed" : "✗ not installed"}`);
-}
-
-// ── OpenCode ───────────────────────────────────────────────────────────────────
-
-function installOpenCode(scope: "global" | "local", serverPath: string): void {
-  const configPath = scope === "global"
-    ? join(homedir(), ".config", "opencode", "config.json")
-    : join(process.cwd(), "opencode.config.json");
-  backup(configPath);
-  const config = readJson(configPath);
-  const mcp = (config.mcp as Record<string, unknown>) ?? {};
-  const servers = (mcp.servers as Record<string, unknown>) ?? {};
-  servers["agents-mesh"] = {
-    type: "local",
-    command: ["bun", serverPath],
-  };
-  mcp.servers = servers;
-  config.mcp = mcp;
-  writeJson(configPath, config);
-  console.log(`  MCP server added to ${configPath}`);
-}
-
-function uninstallOpenCode(scope: "global" | "local"): void {
-  const configPath = scope === "global"
-    ? join(homedir(), ".config", "opencode", "config.json")
-    : join(process.cwd(), "opencode.config.json");
-  if (!existsSync(configPath)) { console.log("  Nothing to remove."); return; }
-  backup(configPath);
-  const config = readJson(configPath);
-  const mcp = config.mcp as Record<string, unknown> | undefined;
-  const servers = mcp?.servers as Record<string, unknown> | undefined;
-  if (servers?.["agents-mesh"]) {
-    delete servers["agents-mesh"];
-    writeJson(configPath, config);
-    console.log(`  Removed agents-mesh from ${configPath}`);
-  } else {
-    console.log("  agents-mesh not found in config.");
-  }
-}
-
-function statusOpenCode(): void {
-  const globalPath = join(homedir(), ".config", "opencode", "config.json");
-  const localPath = join(process.cwd(), "opencode.config.json");
-  for (const [label, p] of [["Global", globalPath], ["Local", localPath]]) {
-    const config = readJson(p);
-    const installed = !!(config.mcp as Record<string, unknown> | undefined)?.["servers"] &&
-      !!((config.mcp as Record<string, Record<string, unknown>>)?.["servers"]?.["agents-mesh"]);
-    console.log(`  ${label} (${p}): ${installed ? "✓ installed" : "✗ not installed"}`);
-  }
-}
-
-// ── GitHub Copilot ─────────────────────────────────────────────────────────────
-
-function installCopilot(scope: "global" | "local", serverPath: string): void {
-  // VS Code settings: global = ~/.vscode/settings.json (or per platform), local = .vscode/settings.json
-  const configPath = scope === "global"
-    ? join(homedir(), "Library", "Application Support", "Code", "User", "settings.json")
-    : join(process.cwd(), ".vscode", "settings.json");
-  backup(configPath);
-  const config = readJson(configPath);
-  const servers = (config["github.copilot.chat.experimental.mcpServers"] as Record<string, unknown>) ?? {};
-  servers["agents-mesh"] = {
-    command: "bun",
-    args: [serverPath],
-  };
-  config["github.copilot.chat.experimental.mcpServers"] = servers;
-  writeJson(configPath, config);
-  console.log(`  MCP server added to ${configPath}`);
-}
-
-function uninstallCopilot(scope: "global" | "local"): void {
-  const configPath = scope === "global"
-    ? join(homedir(), "Library", "Application Support", "Code", "User", "settings.json")
-    : join(process.cwd(), ".vscode", "settings.json");
-  if (!existsSync(configPath)) { console.log("  Nothing to remove."); return; }
-  backup(configPath);
-  const config = readJson(configPath);
-  const servers = config["github.copilot.chat.experimental.mcpServers"] as Record<string, unknown> | undefined;
-  if (servers?.["agents-mesh"]) {
-    delete servers["agents-mesh"];
-    config["github.copilot.chat.experimental.mcpServers"] = servers;
-    writeJson(configPath, config);
-    console.log(`  Removed agents-mesh from ${configPath}`);
-  } else {
-    console.log("  agents-mesh not found in config.");
-  }
-}
-
-function statusCopilot(): void {
-  const globalPath = join(homedir(), "Library", "Application Support", "Code", "User", "settings.json");
-  const localPath = join(process.cwd(), ".vscode", "settings.json");
-  for (const [label, p] of [["Global", globalPath], ["Local", localPath]]) {
-    const config = readJson(p);
-    const installed = !!(config["github.copilot.chat.experimental.mcpServers"] as Record<string, unknown> | undefined)?.["agents-mesh"];
-    console.log(`  ${label} (${p}): ${installed ? "✓ installed" : "✗ not installed"}`);
-  }
-}
-
-// ── Codex ──────────────────────────────────────────────────────────────────────
-
-function installCodex(scope: "global" | "local", serverPath: string): void {
-  const configPath = scope === "global"
-    ? join(homedir(), ".codex", "config.json")
-    : join(process.cwd(), "codex.json");
-  backup(configPath);
-  const config = readJson(configPath);
-  const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
-  mcpServers["agents-mesh"] = {
-    command: "bun",
-    args: [serverPath],
-  };
-  config.mcpServers = mcpServers;
-  writeJson(configPath, config);
-  console.log(`  MCP server added to ${configPath}`);
-}
-
-function uninstallCodex(scope: "global" | "local"): void {
-  const configPath = scope === "global"
-    ? join(homedir(), ".codex", "config.json")
-    : join(process.cwd(), "codex.json");
-  if (!existsSync(configPath)) { console.log("  Nothing to remove."); return; }
-  backup(configPath);
-  const config = readJson(configPath);
-  const mcpServers = config.mcpServers as Record<string, unknown> | undefined;
-  if (mcpServers?.["agents-mesh"]) {
-    delete mcpServers["agents-mesh"];
-    config.mcpServers = mcpServers;
-    writeJson(configPath, config);
-    console.log(`  Removed agents-mesh from ${configPath}`);
-  } else {
-    console.log("  agents-mesh not found in config.");
-  }
-}
-
-function statusCodex(): void {
-  const globalPath = join(homedir(), ".codex", "config.json");
-  const localPath = join(process.cwd(), "codex.json");
-  for (const [label, p] of [["Global", globalPath], ["Local", localPath]]) {
-    const config = readJson(p);
-    const installed = !!(config.mcpServers as Record<string, unknown> | undefined)?.["agents-mesh"];
-    console.log(`  ${label} (${p}): ${installed ? "✓ installed" : "✗ not installed"}`);
-  }
-}
-
-// ── Dispatcher ─────────────────────────────────────────────────────────────────
+// ── Public commands ────────────────────────────────────────────────────────────
 
 export async function installCommand(agent: string | undefined, opts: InstallOptions): Promise<void> {
   if (!agent) {
@@ -317,25 +226,33 @@ Ejemplos:
     process.exit(1);
   }
 
-  const scope: "global" | "local" = opts.local ? "local" : "global";
-  const serverPath = getMcpServerPath();
-
+  const scope: Scope = opts.local ? "local" : "global";
   console.log(`Instalando agents-mesh para ${agent} (${scope})...`);
-
-  switch (agent as Agent) {
-    case "claude-code":  installClaudeCode(scope, serverPath); break;
-    case "gemini-cli":   installGeminiCli(scope, serverPath); break;
-    case "opencode":     installOpenCode(scope, serverPath); break;
-    case "copilot":      installCopilot(scope, serverPath); break;
-    case "codex":        installCodex(scope, serverPath); break;
-  }
-
+  installAgent(agent as Agent, scope);
   console.log(`\n✓ agents-mesh instalado. Reinicia ${agent} para activarlo.`);
 }
 
 export async function uninstallCommand(agent: string | undefined, opts: InstallOptions): Promise<void> {
+  if (opts.all || agent === "--all") {
+    const records = loadTracking();
+    if (records.length === 0) {
+      console.log("No hay instalaciones registradas.");
+      return;
+    }
+    console.log(`Desinstalando agents-mesh de ${records.length} configuración(es)...`);
+    for (const r of records) {
+      if (AGENTS.includes(r.agent as Agent)) {
+        uninstallAgent(r.agent as Agent, r.scope);
+      }
+    }
+    saveTracking([]);
+    console.log("\n✓ agents-mesh removido de todos los agentes.");
+    return;
+  }
+
   if (!agent) {
-    console.log(`Uso: agents-mesh uninstall <agent> [--global | --local]\n`);
+    console.log(`Uso: agents-mesh uninstall <agent> [--global | --local]
+      agents-mesh uninstall --all\n`);
     return;
   }
 
@@ -344,30 +261,16 @@ export async function uninstallCommand(agent: string | undefined, opts: InstallO
     process.exit(1);
   }
 
-  const scope: "global" | "local" = opts.local ? "local" : "global";
+  const scope: Scope = opts.local ? "local" : "global";
   console.log(`Desinstalando agents-mesh de ${agent} (${scope})...`);
-
-  switch (agent as Agent) {
-    case "claude-code":  uninstallClaudeCode(scope); break;
-    case "gemini-cli":   uninstallGeminiCli(scope); break;
-    case "opencode":     uninstallOpenCode(scope); break;
-    case "copilot":      uninstallCopilot(scope); break;
-    case "codex":        uninstallCodex(scope); break;
-  }
+  uninstallAgent(agent as Agent, scope);
 }
 
 export async function installStatusCommand(agent: string | undefined): Promise<void> {
   const agentsToCheck = agent ? [agent] : [...AGENTS];
-
   for (const a of agentsToCheck) {
     if (!AGENTS.includes(a as Agent)) continue;
     console.log(`\n${a}:`);
-    switch (a as Agent) {
-      case "claude-code":  statusClaudeCode(); break;
-      case "gemini-cli":   statusGeminiCli(); break;
-      case "opencode":     statusOpenCode(); break;
-      case "copilot":      statusCopilot(); break;
-      case "codex":        statusCodex(); break;
-    }
+    statusAgent(a as Agent);
   }
 }

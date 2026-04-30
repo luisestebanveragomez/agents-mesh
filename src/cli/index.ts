@@ -87,6 +87,17 @@ async function main() {
       break;
     }
 
+    case "mcp": {
+      const { main: mcpMain } = await import("../mcp/server");
+      await mcpMain();
+      break;
+    }
+
+    case "broker": {
+      await import("../broker/server");
+      break;
+    }
+
     case "install": {
       const { installCommand } = await import("./commands/install");
       const [agent, ...installRest] = rest;
@@ -97,8 +108,9 @@ async function main() {
 
     case "uninstall": {
       const { uninstallCommand } = await import("./commands/install");
-      const [agent, ...uninstallRest] = rest;
-      const opts = { global: uninstallRest.includes("--global"), local: uninstallRest.includes("--local") };
+      const allFlag = rest.includes("--all");
+      const agent = allFlag ? "--all" : rest[0];
+      const opts = { global: rest.includes("--global"), local: rest.includes("--local"), all: allFlag };
       await uninstallCommand(agent, opts);
       break;
     }
@@ -126,7 +138,10 @@ Comandos:
   dashboard                         Abre el dashboard
   install <agent> [--global|--local]  Instala en un agente
   uninstall <agent> [--global|--local] Desinstala de un agente
+  uninstall --all                     Desinstala de todos los agentes
   installed [agent]                   Muestra estado de instalación
+  mcp                                 Inicia el MCP server (stdio)
+  broker                              Inicia el broker HTTP
 
 Agents:  claude-code, gemini-cli, opencode, copilot, codex
 `);

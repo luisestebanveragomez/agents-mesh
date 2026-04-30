@@ -11,7 +11,7 @@ import { peersNotifyTool } from "./tools/peers-notify";
 import { peersSearchTool } from "./tools/peers-search";
 import { peersCheckTool } from "./tools/peers-check";
 
-async function main() {
+export async function main() {
   await startPeer();
 
   const server = new Server(
@@ -205,4 +205,6 @@ async function main() {
   await server.connect(transport);
 }
 
-main().catch(console.error);
+if (import.meta.main) {
+  main().catch(console.error);
+}

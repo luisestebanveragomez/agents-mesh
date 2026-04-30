@@ -8,13 +8,21 @@ In development — v0.1.0
 
 ## Install
 
+### Homebrew (recommended)
+
 ```bash
-git clone git@github.com:your-org/agents-mesh.git
-cd agents-mesh
-bun install
+brew tap luisestebanveragomez/agents-mesh https://github.com/luisestebanveragomez/agents-mesh
+brew install agents-mesh
 ```
 
-Then add `agents-mesh` to your PATH (or use `bunx` / `bun src/cli/index.ts`).
+### From source
+
+```bash
+git clone git@github.com:luisestebanveragomez/agents-mesh.git
+cd agents-mesh
+bun install
+bun link   # adds agents-mesh to PATH
+```
 
 ## Adding agents-mesh to an AI agent
 
@@ -63,67 +71,16 @@ For any agent that supports MCP servers, add this to its config:
 {
   "mcpServers": {
     "agents-mesh": {
-      "command": "bun",
-      "args": ["/path/to/agents-mesh/src/mcp/server.ts"]
+      "command": "agents-mesh",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
-Replace `/path/to/agents-mesh` with the actual path where you cloned the repo.
+This works for **Cursor** (`.cursor/mcp.json`), **Windsurf** (`~/.codeium/windsurf/mcp_config.json`), **Cline/Roo** (MCP Settings in VS Code), and any other MCP-compatible agent.
 
-#### Cursor
-
-Add to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
-
-```json
-{
-  "mcpServers": {
-    "agents-mesh": {
-      "command": "bun",
-      "args": ["/path/to/agents-mesh/src/mcp/server.ts"]
-    }
-  }
-}
-```
-
-#### Windsurf
-
-Add to `~/.codeium/windsurf/mcp_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "agents-mesh": {
-      "command": "bun",
-      "args": ["/path/to/agents-mesh/src/mcp/server.ts"]
-    }
-  }
-}
-```
-
-#### Cline / Roo
-
-In VS Code, open **Cline MCP Settings** and add:
-
-```json
-{
-  "agents-mesh": {
-    "command": "bun",
-    "args": ["/path/to/agents-mesh/src/mcp/server.ts"]
-  }
-}
-```
-
-#### Any other MCP-compatible agent
-
-The MCP server runs as a stdio process. Start it with:
-
-```bash
-bun /path/to/agents-mesh/src/mcp/server.ts
-```
-
-Refer to your agent's documentation for how to register an MCP server.
+The MCP server runs as a stdio process: `agents-mesh mcp`
 
 ## Usage
 
@@ -146,3 +103,14 @@ agents-mesh dashboard
 ```
 
 Opens a local web dashboard at http://localhost:5723 showing all active agents, messages, and the communication graph.
+
+## Uninstall
+
+```bash
+# Remove from all AI agents first
+agents-mesh uninstall --all
+
+# Then remove the binary
+brew uninstall agents-mesh
+brew untap luisestebanveragomez/agents-mesh
+```
