@@ -1,131 +1,115 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_DIR="${HOME}/.agents-mesh"
-DATA_DIR="${HOME}/.agents-mesh-data"
-SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="luisestebanveragomez/agents-mesh"
+BINARY="agents-mesh"
+INSTALL_DIR="${AGENTS_MESH_INSTALL_DIR:-/usr/local/bin}"
 
-GREEN='\033[0;32m'
 RED='\033[0;31m'
+GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+BOLD='\033[1m'
 NC='\033[0m'
 
-COMPLETED_STEPS=()
+info()    { echo -e "${BOLD}${1}${NC}"; }
+success() { echo -e "${GREEN}✓${NC} ${1}"; }
+warn()    { echo -e "${YELLOW}!${NC} ${1}"; }
+error()   { echo -e "${RED}✗${NC} ${1}" >&2; exit 1; }
 
-rollback() {
-  echo -e "\n${RED}❌ Error en la instalación, revirtiendo...${NC}"
-  for step in "${COMPLETED_STEPS[@]}"; do
-    case "$step" in
-      "mcp")        claude mcp remove agents-mesh 2>/dev/null || true ;;
-      "install_dir") rm -rf "$INSTALL_DIR" ;;
-      "data_dir")   rm -rf "$DATA_DIR" ;;
-    esac
-  done
-  echo -e "${YELLOW}Sistema limpio. Nada fue modificado permanentemente.${NC}"
-  exit 1
-}
-trap rollback ERR
+detect_platform() {
+  local os arch
+  os="$(uname -s)"
+  arch="$(uname -m)"
 
-check_deps() {
-  echo -e "${BLUE}[1/5] Verificando dependencias...${NC}"
-
-  command -v node &>/dev/null || {
-    echo -e "${RED}❌ Node.js no encontrado. Instálalo desde https://nodejs.org${NC}"
-    exit 1
-  }
-
-  command -v claude &>/dev/null || {
-    echo -e "${RED}❌ Claude Code no encontrado. Instálalo desde https://claude.ai/code${NC}"
-    exit 1
-  }
-
-  if ! command -v bun &>/dev/null; then
-    echo -e "${YELLOW}  Bun no encontrado, instalando...${NC}"
-    curl -fsSL https://bun.sh/install | bash
-    # Agregar bun al PATH para este script
-    export PATH="$HOME/.bun/bin:$PATH"
-    command -v bun &>/dev/null || {
-      echo -e "${RED}❌ No se pudo instalar Bun${NC}"
-      exit 1
-    }
-  fi
-
-  echo -e "${GREEN}✅ Dependencias OK (node: $(node --version), bun: $(bun --version))${NC}"
+  case "$os" in
+    Darwin)
+      case "$arch" in
+        arm64)  echo "darwin-arm64" ;;
+        x86_64) echo "darwin-x64" ;;
+        *)      error "Unsupported macOS architecture: $arch" ;;
+      esac
+      ;;
+    Linux)
+      case "$arch" in
+        x86_64)  echo "linux-x64" ;;
+        aarch64) echo "linux-arm64" ;;
+        *)       error "Unsupported Linux architecture: $arch" ;;
+      esac
+      ;;
+    *)
+      error "Unsupported OS: $os. For Windows use WSL: https://learn.microsoft.com/windows/wsl/install"
+      ;;
+  esac
 }
 
-install_files() {
-  echo -e "${BLUE}[2/5] Instalando archivos...${NC}"
-
-  [ -d "$INSTALL_DIR" ] && rm -rf "$INSTALL_DIR"
-  cp -r "$SOURCE_DIR" "$INSTALL_DIR"
-
-  cd "$INSTALL_DIR"
-  bun install --silent
-
-  COMPLETED_STEPS+=("install_dir")
-  echo -e "${GREEN}✅ Archivos instalados en ${INSTALL_DIR}${NC}"
-}
-
-create_data_dir() {
-  echo -e "${BLUE}[3/5] Creando directorio de datos...${NC}"
-
-  mkdir -p "${DATA_DIR}/peers"
-  mkdir -p "${DATA_DIR}/messages"
-  mkdir -p "${DATA_DIR}/responses"
-  mkdir -p "${DATA_DIR}/locks"
-  touch "${DATA_DIR}/activity.log"
-
-  COMPLETED_STEPS+=("data_dir")
-  echo -e "${GREEN}✅ Datos en ${DATA_DIR}${NC}"
-}
-
-register_mcp() {
-  echo -e "${BLUE}[4/5] Registrando MCP server...${NC}"
-
-  claude mcp add \
-    --scope user \
-    --transport stdio \
-    agents-mesh \
-    -- bun "${INSTALL_DIR}/src/mcp/server.ts"
-
-  COMPLETED_STEPS+=("mcp")
-  echo -e "${GREEN}✅ MCP registrado globalmente${NC}"
-}
-
-verify() {
-  echo -e "${BLUE}[5/5] Verificando instalación...${NC}"
-
-  claude mcp list 2>/dev/null | grep -q "agents-mesh" || {
-    echo -e "${RED}❌ MCP no aparece en la lista${NC}"
-    return 1
-  }
-
-  echo -e "${GREEN}✅ Verificación OK${NC}"
+get_latest_version() {
+  local version
+  version="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+    | grep '"tag_name"' \
+    | sed 's/.*"tag_name": *"\(.*\)".*/\1/')"
+  [ -n "$version" ] || error "Could not fetch latest version from GitHub"
+  echo "$version"
 }
 
 main() {
   echo ""
-  echo "╔═══════════════════════════════════╗"
-  echo "║  Claude Peers Installer v0.1.0    ║"
-  echo "╚═══════════════════════════════════╝"
+  info "Installing agents-mesh..."
   echo ""
 
-  check_deps
-  install_files
-  create_data_dir
-  register_mcp
-  verify
+  local platform version tarball url tmpdir bin_file needs_sudo
+
+  platform="$(detect_platform)"
+  version="${AGENTS_MESH_VERSION:-$(get_latest_version)}"
+  tarball="${BINARY}-${platform}.tar.gz"
+  url="https://github.com/${REPO}/releases/download/${version}/${tarball}"
+
+  echo "  Platform : $platform"
+  echo "  Version  : $version"
+  echo "  Install  : $INSTALL_DIR"
+  echo ""
+
+  command -v curl >/dev/null 2>&1 || error "curl is required but not installed"
+
+  tmpdir="$(mktemp -d)"
+  trap 'rm -rf "$tmpdir"' EXIT
+
+  info "Downloading ${tarball}..."
+  if ! curl -fsSL --progress-bar "$url" -o "${tmpdir}/${tarball}"; then
+    error "Download failed.\nCheck that ${version} exists at https://github.com/${REPO}/releases"
+  fi
+
+  tar -xzf "${tmpdir}/${tarball}" -C "$tmpdir"
+
+  bin_file="$(find "$tmpdir" -maxdepth 1 -type f -name "${BINARY}*" ! -name "*.tar.gz" | head -1)"
+  [ -n "$bin_file" ] || error "Binary not found in archive"
+
+  needs_sudo=""
+  if [ ! -w "$INSTALL_DIR" ]; then
+    warn "Installing to $INSTALL_DIR requires sudo..."
+    needs_sudo="sudo"
+  fi
+
+  $needs_sudo mkdir -p "$INSTALL_DIR"
+  $needs_sudo install -m 755 "$bin_file" "${INSTALL_DIR}/${BINARY}"
 
   echo ""
-  echo "╔═══════════════════════════════════╗"
-  echo "║  ✅ Instalación completa          ║"
-  echo "╚═══════════════════════════════════╝"
+  success "agents-mesh ${version} installed to ${INSTALL_DIR}/${BINARY}"
+
+  if ! command -v agents-mesh >/dev/null 2>&1; then
+    echo ""
+    warn "$INSTALL_DIR is not in your PATH. Add this to your shell config:"
+    echo ""
+    echo "    export PATH=\"\$PATH:${INSTALL_DIR}\""
+    echo ""
+  fi
+
   echo ""
-  echo "Próximos pasos:"
-  echo "  → Abre Claude Code y escribe: 'lista los peers activos'"
-  echo "  → Dashboard: bun ${INSTALL_DIR}/src/cli/index.ts dashboard"
-  echo "  → Desinstalar: bash ${INSTALL_DIR}/scripts/uninstall.sh"
+  info "Next steps:"
+  echo "  agents-mesh install claude-code    # add to Claude Code"
+  echo "  agents-mesh install gemini-cli     # add to Gemini CLI"
+  echo "  agents-mesh install opencode       # add to OpenCode"
+  echo "  agents-mesh installed              # check status"
+  echo "  agents-mesh dashboard              # open web dashboard"
   echo ""
 }
 
