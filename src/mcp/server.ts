@@ -1,7 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { startPeer, getCurrentPeerId } from "./lifecycle";
+import { startPeer, getCurrentPeerId, getPendingCount, setToolListChangedNotifier } from "./lifecycle";
 import { brokerFetch } from "../broker/launcher";
 import { peersListTool } from "./tools/peers-list";
 import { peersStatusTool } from "./tools/peers-status";
@@ -19,8 +19,18 @@ async function main() {
     { capabilities: { tools: {} } }
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
+  // Wire up poll loop → sendToolListChanged so agents re-fetch descriptions on new messages
+  setToolListChangedNotifier(() => {
+    server.sendToolListChanged().catch(() => {});
+  });
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    const pending = getPendingCount();
+    const checkDesc = pending > 0
+      ? `Check for pending messages — ⚠️ ${pending} UNREAD MESSAGE${pending > 1 ? "S" : ""} RIGHT NOW`
+      : "Check for pending messages from other agents";
+
+    return { tools: [
       {
         name: "peers_list",
         description: "Lista todas las instancias de agentes IA activos en el sistema",
@@ -106,14 +116,14 @@ async function main() {
       },
       {
         name: "peers_check",
-        description: "Revisa si hay mensajes pendientes sin responder de otros peers",
+        description: checkDesc,
         inputSchema: {
           type: "object",
           properties: {},
         },
       },
-    ],
-  }));
+    ]};
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
@@ -150,6 +160,7 @@ async function main() {
           body: JSON.stringify({ id: selfId, status: "idle" }),
         }).catch(() => {});
       }
+
 
       // Middleware: incluir mensajes pendientes en cada respuesta
       const { getPendingMessages, clearPendingMessages } = await import("./lifecycle");

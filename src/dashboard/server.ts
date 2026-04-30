@@ -35,7 +35,8 @@ function createSSEStream(): ReadableStream {
 async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
-  const headers = { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache" };
+  // C5: no CORS — dashboard is local-only, no cross-origin access needed
+  const headers = { "Cache-Control": "no-cache" };
 
   // Proxy al broker
   if (path === "/api/peers") {
@@ -54,7 +55,7 @@ async function handler(req: Request): Promise<Response> {
   }
 
   if (path === "/api/activity") {
-    const limit = url.searchParams.get("limit") || "50";
+    const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 500); // H3: cap DoS
     const data = await brokerGet(`/activity?limit=${limit}`).catch(() => []);
     return Response.json(data, { headers });
   }
@@ -101,7 +102,7 @@ export async function startDashboard(port = DASHBOARD_PORT): Promise<void> {
   let actualPort = port;
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      server = serve({ port: actualPort, fetch: handler });
+      server = serve({ port: actualPort, hostname: "127.0.0.1", fetch: handler }); // C1: loopback only
       break;
     } catch (e) {
       if (String(e).includes("already in use") || String(e).includes("in use")) {

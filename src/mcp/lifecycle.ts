@@ -1,13 +1,32 @@
-import { ensureBroker, brokerFetch } from "../broker/launcher";
+import { ensureBroker, brokerFetch, setPeerToken } from "../broker/launcher";
 import { detectAgent } from "./agent-detector";
 import { inferRole } from "./role-inferrer";
 import { generateId, now } from "../shared/utils";
 import { HEARTBEAT_MS, BROKER_POLL_MS } from "../shared/constants";
 import { BrokerPeer, BrokerMessage } from "../broker/types";
-import { formatForAgent } from "./security";
+import { writeFileSync, mkdirSync, rmSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
+
+// C4: use ~/.claude-peers/peers/ instead of /tmp/ to avoid world-writable symlink attacks
+const PEER_MAP_DIR = join(homedir(), ".claude-peers", "peers");
+
+function writePeerMap(peerId: string): void {
+  try {
+    mkdirSync(PEER_MAP_DIR, { recursive: true, mode: 0o700 }); // C4: private dir
+    writeFileSync(join(PEER_MAP_DIR, String(process.ppid)), peerId, { encoding: "utf-8", mode: 0o600 }); // C4: private file
+  } catch {}
+}
+
+function removePeerMap(): void {
+  try { rmSync(join(PEER_MAP_DIR, String(process.ppid)), { force: true }); } catch {}
+}
 
 let currentPeerId: string | null = null;
 let cleanupDone = false;
+
+// Callback set by server.ts to trigger sendToolListChanged()
+let toolListChangedNotifier: (() => void) | null = null;
 
 // Cola de mensajes pendientes detectados por el polling
 const pendingMessages: BrokerMessage[] = [];
@@ -23,6 +42,10 @@ export function getPendingMessages(): BrokerMessage[] {
   return pendingMessages;
 }
 
+export function getPendingCount(): number {
+  return pendingMessages.length;
+}
+
 export function getDeliveredMessage(id: string): BrokerMessage | undefined {
   return deliveredMessages.get(id);
 }
@@ -32,7 +55,6 @@ export function removeDeliveredMessage(id: string): void {
 }
 
 export function moveToDelivered(): void {
-  // Mueve mensajes de pendingMessages a deliveredMessages y limpia la cola
   for (const msg of pendingMessages) {
     deliveredMessages.set(msg.id, msg);
   }
@@ -41,6 +63,11 @@ export function moveToDelivered(): void {
 
 export function clearPendingMessages(): void {
   moveToDelivered();
+}
+
+// Set by server.ts after creating the MCP server instance
+export function setToolListChangedNotifier(fn: () => void): void {
+  toolListChangedNotifier = fn;
 }
 
 export async function startPeer(): Promise<string> {
@@ -69,12 +96,16 @@ export async function startPeer(): Promise<string> {
     git_branch: gitBranch,
   };
 
-  await brokerFetch("/peer/register", {
+  const registerRes = await brokerFetch<{ ok: boolean; token: string }>("/peer/register", {
     method: "POST",
     body: JSON.stringify(peer),
   });
 
+  // C3: store token so all subsequent brokerFetch calls are authenticated
+  if (registerRes.token) setPeerToken(registerRes.token);
+
   currentPeerId = id;
+  writePeerMap(id);
 
   // Heartbeat cada 15s
   const heartbeatTimer = setInterval(async () => {
@@ -91,9 +122,22 @@ export async function startPeer(): Promise<string> {
     if (!currentPeerId) return;
     try {
       const messages = await brokerFetch<BrokerMessage[]>(`/message/poll/${id}`);
+      if (messages.length === 0) return;
+
       for (const msg of messages) {
-        pendingMessages.push(msg);
+        // L1: cap in-memory buffer to prevent OOM
+        if (pendingMessages.length < 1000) {
+          pendingMessages.push(msg);
+        }
+        // ACK automático: avisar al emisor que el mensaje fue recibido
+        if (msg.type === "ask" || msg.type === "notify") {
+          brokerFetch(`/message/ack/${msg.id}`, { method: "POST" }).catch(() => {});
+        }
       }
+
+      // Notify the MCP client that tools list changed (triggers re-fetch of descriptions)
+      toolListChangedNotifier?.();
+
     } catch {}
   }, BROKER_POLL_MS);
 
@@ -102,6 +146,7 @@ export async function startPeer(): Promise<string> {
     cleanupDone = true;
     clearInterval(heartbeatTimer);
     clearInterval(pollTimer);
+    removePeerMap();
     try {
       await brokerFetch(`/peer/${id}`, { method: "DELETE" });
     } catch {}

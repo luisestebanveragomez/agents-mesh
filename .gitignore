@@ -3,3 +3,6 @@ dist/
 .worktrees/
 *.log
 .env
+.claude
+.idea
+.DS_Store

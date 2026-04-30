@@ -26,9 +26,15 @@ export function getDb(): Database {
       last_heartbeat TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'idle',
       current_task TEXT,
-      git_branch TEXT
+      git_branch TEXT,
+      token TEXT
     )
   `);
+
+  // C3: migration — add token column for existing DBs
+  try {
+    _db.run("ALTER TABLE peers ADD COLUMN token TEXT");
+  } catch {} // column already exists
 
   _db.run(`
     CREATE TABLE IF NOT EXISTS messages (
@@ -43,9 +49,15 @@ export function getDb(): Database {
       metadata TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
-      delivered INTEGER NOT NULL DEFAULT 0
+      delivered INTEGER NOT NULL DEFAULT 0,
+      auto_responded INTEGER NOT NULL DEFAULT 0
     )
   `);
+
+  // Migration: add auto_responded if it doesn't exist yet
+  try {
+    _db.run("ALTER TABLE messages ADD COLUMN auto_responded INTEGER NOT NULL DEFAULT 0");
+  } catch {} // column already exists
 
   _db.run(`
     CREATE TABLE IF NOT EXISTS activity (

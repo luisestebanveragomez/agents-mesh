@@ -6,6 +6,42 @@ import { generateId, now, expiresAt } from "../../shared/utils";
 import { TTL_S } from "../../shared/constants";
 import { AskResult } from "../../shared/types";
 
+// Max wait times depending on target status
+const TIMEOUT_BY_STATUS: Record<string, number> = {
+  idle:    120,   // 2 min — should respond quickly
+  working: 600,   // 10 min — busy, give it time
+  waiting: 300,   // 5 min — waiting on something else
+};
+
+// How long to wait for ACK before giving up (peer likely dead)
+const ACK_TIMEOUT_S = 30;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function waitForAck(msgId: string, deadlineMs: number): Promise<boolean> {
+  while (Date.now() < deadlineMs) {
+    await sleep(500);
+    try {
+      const result = await brokerFetch<{ acked: boolean }>(`/message/ack/${msgId}`);
+      if (result.acked) return true;
+    } catch {}
+  }
+  return false;
+}
+
+async function isPeerAlive(peerId: string): Promise<{ alive: boolean; status: string }> {
+  try {
+    const peers = await brokerFetch<BrokerPeer[]>("/peers");
+    const peer = peers.find(p => p.id === peerId);
+    if (!peer) return { alive: false, status: "dead" };
+    return { alive: true, status: peer.status };
+  } catch {
+    return { alive: false, status: "dead" };
+  }
+}
+
 export async function peersAskTool(args: {
   target: string;
   question: string;
@@ -20,18 +56,17 @@ export async function peersAskTool(args: {
   const self = peers.find(p => p.id === selfId);
   if (!self) return { answered: false };
 
-  // Resolver target por ID o por role
   const target = peers.find(p => p.id === args.target || p.role === args.target);
   if (!target) return { answered: false };
 
+  // Adaptive timeout: use explicit override, or derive from target's current status
+  const adaptiveTimeout = args.timeout_seconds ?? TIMEOUT_BY_STATUS[target.status] ?? TTL_S;
   const msgId = generateId("msg");
-  const timeoutSec = args.timeout_seconds ?? TTL_S;
 
-  // Validar (usando el tipo Message compatible)
   const validation = validateMessage({
     id: msgId, from: selfId, from_role: self.role, from_agent: self.agent as any,
     to: target.id, to_role: target.role, type: "ask", content: args.question,
-    metadata: {}, created_at: now(), expires_at: expiresAt(timeoutSec),
+    metadata: {}, created_at: now(), expires_at: expiresAt(adaptiveTimeout),
     read_at: null, responded_at: null,
   });
   if (!validation.valid) return { answered: false };
@@ -41,26 +76,56 @@ export async function peersAskTool(args: {
     body: JSON.stringify({
       id: msgId, from_id: selfId, from_role: self.role, from_agent: self.agent,
       to_id: target.id, to_role: target.role, type: "ask",
-      content: args.question, metadata: JSON.stringify({ search_if_unknown: args.search_if_unknown, search_scope: args.search_scope }),
-      created_at: now(), expires_at: expiresAt(timeoutSec),
+      content: args.question,
+      metadata: JSON.stringify({ search_if_unknown: args.search_if_unknown, search_scope: args.search_scope }),
+      created_at: now(), expires_at: expiresAt(adaptiveTimeout),
     } as BrokerMessage),
   });
 
-  // Polling para respuesta
-  const deadline = Date.now() + timeoutSec * 1000;
-  while (Date.now() < deadline) {
+  // Phase 1: wait for ACK (confirms B is alive and received the message)
+  const ackDeadline = Date.now() + ACK_TIMEOUT_S * 1000;
+  const acked = await waitForAck(msgId, ackDeadline);
+
+  if (!acked) {
+    // B never acknowledged — check if it's still alive
+    const { alive, status } = await isPeerAlive(target.id);
+    if (!alive) {
+      return { answered: false, timeout: true, error: `Peer ${target.role} is no longer active` };
+    }
+    // Alive but no ACK yet — it may not have polled yet, continue waiting
+  }
+
+  // Phase 2: wait for actual response with adaptive deadline
+  // If B is working/waiting, extend deadline dynamically as long as B is still alive
+  const responseDeadline = Date.now() + adaptiveTimeout * 1000;
+
+  while (Date.now() < responseDeadline) {
     await sleep(500);
+
     const result = await brokerFetch<{ found: boolean; content?: string }>(
       `/message/response/${selfId}/${msgId}`
     );
     if (result.found && result.content) {
-      return { answered: true, answer: result.content, answered_by: target.id, answered_by_agent: target.agent as any };
+      return {
+        answered: true,
+        answer: result.content,
+        answered_by: target.id,
+        answered_by_agent: target.agent as any,
+      };
+    }
+
+    // Every 30s, check if B is still alive — fail fast if it disappeared
+    if (Math.floor((Date.now() - (responseDeadline - adaptiveTimeout * 1000)) / 30000) > 0) {
+      const { alive, status: currentStatus } = await isPeerAlive(target.id);
+      if (!alive) {
+        return { answered: false, timeout: true, error: `Peer ${target.role} disconnected while processing` };
+      }
+      // If B came back to idle after being working, give it 30 more seconds max
+      if (currentStatus === "idle" && Date.now() > responseDeadline - 30000) {
+        break;
+      }
     }
   }
 
   return { answered: false, timeout: true };
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }

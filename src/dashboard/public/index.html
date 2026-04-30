@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,489 +8,762 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.29.2/cytoscape.min.js"></script>
   <style>
     :root {
-      --status-working:  #10b981;
-      --status-waiting:  #f59e0b;
-      --status-idle:     #6b7280;
-      --status-dead:     #ef4444;
-      --bg-main:         #0a0f1e;
-      --bg-card:         #111827;
-      --bg-graph:        #0d1424;
-      --bg-hover:        #1e293b;
-      --border:          #1e293b;
-      --text-primary:    #f1f5f9;
-      --text-secondary:  #94a3b8;
-      --text-muted:      #475569;
+      --bg-main:#0a0f1e; --bg-card:#111827; --bg-graph:#0d1424;
+      --border:#1e293b; --text-primary:#f1f5f9; --text-secondary:#94a3b8; --text-muted:#475569;
+    }
+    [data-theme="light"] {
+      --bg-main:#f1f5f9; --bg-card:#ffffff; --bg-graph:#e8eef7;
+      --border:#cbd5e1; --text-primary:#0f172a; --text-secondary:#475569; --text-muted:#94a3b8;
     }
     *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; overflow-x: hidden; }
-    body { background: var(--bg-main); color: var(--text-primary); font-family: 'SF Mono', 'Fira Code', monospace; }
+    html, body { margin:0; overflow-x:hidden; }
+    body { background:var(--bg-main); color:var(--text-primary); font-family:'SF Mono','Fira Code',monospace; transition:background 0.2s,color 0.2s; }
+    .page { max-width:1400px; margin:0 auto; padding:20px; }
 
-    .page { max-width: 1400px; margin: 0 auto; padding: 20px 20px; }
+    #graph { width:100%; height:340px; background:var(--bg-graph); border-radius:10px; border:1px solid var(--border); background-image:radial-gradient(circle, var(--border) 1px, transparent 1px); background-size:28px 28px; }
+    #activity-feed { height:340px; overflow-y:auto; background:var(--bg-card); border-radius:10px; border:1px solid var(--border); padding:10px; }
 
-    #graph {
-      width: 100%;
-      height: 340px;
-      background: var(--bg-graph);
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background-image: radial-gradient(circle, #1e293b 1px, transparent 1px);
-      background-size: 28px 28px;
-    }
-    #activity-feed {
-      height: 340px;
-      overflow-y: auto;
-      background: var(--bg-card);
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      padding: 10px;
-    }
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; min-width:0; }
+    .two-col > * { min-width:0; }
+    .stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .metrics-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
 
-    .two-col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      min-width: 0;
-    }
-    .two-col > * { min-width: 0; }
+    .card { background:var(--bg-card); border-radius:10px; border:1px solid var(--border); }
+    .peer-card { background:var(--bg-card); border-radius:10px; padding:14px 16px; border:1px solid var(--border); transition:border-color 0.2s,box-shadow 0.2s; min-width:0; cursor:pointer; }
+    .peer-card:hover { border-color:#334155; }
+    .peer-card.highlighted { border-color:#60a5fa; box-shadow:0 0 0 2px rgba(96,165,250,0.2); }
+    .peers-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
 
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-    }
+    .status-badge { font-size:9px; font-weight:bold; padding:2px 7px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; white-space:nowrap; flex-shrink:0; }
+    .status-working { background:rgba(16,185,129,0.15); color:#10b981; }
+    .status-waiting { background:rgba(245,158,11,0.15); color:#f59e0b; }
+    .status-idle    { background:rgba(107,114,128,0.12); color:#6b7280; }
 
-    .card {
-      background: var(--bg-card);
-      border-radius: 10px;
-      border: 1px solid var(--border);
-    }
-    .peer-card {
-      background: var(--bg-card);
-      border-radius: 10px;
-      padding: 14px 16px;
-      border: 1px solid var(--border);
-      transition: border-color 0.2s;
-      min-width: 0;
-    }
-    .peer-card:hover { border-color: #334155; }
-    .peers-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 12px;
-    }
+    .health-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+    .health-ok   { background:#10b981; }
+    .health-warn { background:#f59e0b; }
+    .health-dead { background:#ef4444; }
 
-    .status-badge {
-      font-size: 9px; font-weight: bold; padding: 2px 7px;
-      border-radius: 999px; letter-spacing: 0.05em; text-transform: uppercase;
-      white-space: nowrap; flex-shrink: 0;
-    }
-    .status-working { background: rgba(16,185,129,0.15); color: #10b981; }
-    .status-waiting { background: rgba(245,158,11,0.15); color: #f59e0b; }
-    .status-idle    { background: rgba(107,114,128,0.12); color: #6b7280; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
 
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .feed-item { padding:6px 10px; border-left:2px solid var(--border); border-radius:0 4px 4px 0; margin-bottom:4px; }
+    .feed-item.message { border-color:#3b82f6; background:rgba(59,130,246,0.04); }
+    .feed-item.join    { border-color:#10b981; background:rgba(16,185,129,0.04); }
+    .feed-item.leave   { border-color:#ef4444; background:rgba(239,68,68,0.04); }
+    .feed-time { font-size:10px; color:var(--text-muted); display:block; margin-bottom:1px; }
+    .feed-desc { font-size:11px; color:var(--text-secondary); word-break:break-word; }
 
-    .feed-item { padding: 6px 10px; border-left: 2px solid #1e293b; border-radius: 0 4px 4px 0; margin-bottom: 4px; }
-    .feed-item.message { border-color: #3b82f6; background: rgba(59,130,246,0.04); }
-    .feed-item.join    { border-color: #10b981; background: rgba(16,185,129,0.04); }
-    .feed-item.leave   { border-color: #ef4444; background: rgba(239,68,68,0.04); }
-    .feed-time { font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 1px; }
-    .feed-desc { font-size: 11px; color: var(--text-secondary); word-break: break-word; }
+    .stat-bar { height:3px; border-radius:2px; margin-top:8px; background:var(--border); overflow:hidden; }
+    .stat-bar-fill { height:100%; border-radius:2px; transition:width 0.4s; }
 
-    .stat-bar { height: 3px; border-radius: 2px; margin-top: 8px; background: var(--border); overflow: hidden; }
-    .stat-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s; }
+    .copy-btn { cursor:pointer; opacity:0.5; font-size:10px; padding:1px 5px; border:1px solid var(--border); border-radius:3px; background:transparent; color:var(--text-muted); }
+    .copy-btn:hover { opacity:1; }
+    .icon-btn { cursor:pointer; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:4px 8px; color:var(--text-muted); font-size:13px; display:flex; align-items:center; gap:4px; transition:border-color 0.2s,color 0.2s; white-space:nowrap; }
+    .icon-btn:hover { border-color:#60a5fa; color:var(--text-primary); }
+    .section-label { font-size:10px; letter-spacing:0.1em; color:var(--text-muted); margin-bottom:8px; }
+    #no-peers { display:none; }
 
-    .copy-btn { cursor: pointer; opacity: 0.5; font-size: 10px; padding: 1px 5px; border: 1px solid var(--border); border-radius: 3px; background: transparent; color: var(--text-muted); }
-    .copy-btn:hover { opacity: 1; }
-    #no-peers { display: none; }
-    .section-label { font-size: 10px; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 8px; }
+    .search-input { width:100%; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:7px 12px; color:var(--text-primary); font-family:inherit; font-size:12px; outline:none; transition:border-color 0.2s; margin-bottom:12px; }
+    .search-input:focus { border-color:#60a5fa; }
+    .search-input::placeholder { color:var(--text-muted); }
 
-    @media (max-width: 860px) {
-      .two-col   { grid-template-columns: 1fr; }
-      .stats-grid { grid-template-columns: 1fr 1fr; }
-      #graph, #activity-feed { height: 300px; }
-    }
-    @media (max-width: 480px) {
-      .stats-grid { grid-template-columns: 1fr; }
-      .peers-grid { grid-template-columns: 1fr; }
-    }
+    /* Tooltip */
+    #graph-tooltip { position:fixed; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:11px; color:var(--text-secondary); pointer-events:none; z-index:1000; display:none; min-width:160px; max-width:280px; box-shadow:0 4px 16px rgba(0,0,0,0.3); }
+    #graph-tooltip .tt-role { font-weight:bold; color:var(--text-primary); margin-bottom:4px; }
+    #graph-tooltip .tt-row { display:flex; justify-content:space-between; gap:12px; margin-top:2px; }
+    #graph-tooltip .tt-label { color:var(--text-muted); }
+
+    /* Conversation modal */
+    #conv-modal { display:none; position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; }
+    #conv-modal.open { display:flex; }
+    #conv-box { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; width:min(580px,95vw); max-height:80vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+    #conv-header { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+    #conv-title { font-size:12px; font-weight:bold; color:var(--text-primary); }
+    #conv-close { cursor:pointer; color:var(--text-muted); font-size:18px; line-height:1; }
+    #conv-close:hover { color:var(--text-primary); }
+    #conv-messages { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:8px; }
+    .conv-msg { max-width:85%; padding:8px 12px; border-radius:10px; font-size:11px; }
+    .conv-msg.outgoing { align-self:flex-end; background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.2); }
+    .conv-msg.incoming { align-self:flex-start; background:rgba(255,255,255,0.04); border:1px solid var(--border); }
+    .conv-msg-meta { font-size:9px; color:var(--text-muted); margin-bottom:3px; }
+    .conv-msg-text { color:var(--text-secondary); word-break:break-word; }
+    .conv-empty { text-align:center; color:var(--text-muted); font-size:12px; padding:32px; }
+
+    /* Msg history in card */
+    .msg-history { margin-top:8px; border-top:1px solid var(--border); padding-top:8px; display:none; }
+    .msg-history.open { display:block; }
+    .msg-item { font-size:10px; color:var(--text-muted); padding:3px 0; border-bottom:1px solid rgba(255,255,255,0.03); }
+    .msg-item:last-child { border-bottom:none; }
+    .msg-toggle { font-size:9px; color:#60a5fa; cursor:pointer; margin-top:6px; display:inline-block; }
+    .msg-toggle:hover { text-decoration:underline; }
+
+    @media (max-width:860px) { .two-col{grid-template-columns:1fr;} .stats-grid,.metrics-grid{grid-template-columns:1fr 1fr;} #graph,#activity-feed{height:300px;} }
+    @media (max-width:480px) { .stats-grid,.metrics-grid,.peers-grid{grid-template-columns:1fr;} }
   </style>
 </head>
 <body>
-  <div class="page">
 
-    <!-- Header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <div>
-        <h1 style="color:#60a5fa;letter-spacing:0.2em;font-size:1.1rem;font-weight:bold;margin:0">AGENT-MESH</h1>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:2px"><span id="last-update">actualizando...</span></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;animation:pulse 2s infinite"></span>
-        <span style="font-size:11px;color:var(--text-muted)">live</span>
-      </div>
+<div id="graph-tooltip">
+  <div class="tt-role" id="tt-role"></div>
+  <div class="tt-row"><span class="tt-label">agent</span><span id="tt-agent"></span></div>
+  <div class="tt-row"><span class="tt-label">status</span><span id="tt-status"></span></div>
+  <div class="tt-row"><span class="tt-label">branch</span><span id="tt-branch" style="color:#60a5fa"></span></div>
+  <div class="tt-row"><span class="tt-label">path</span><span id="tt-path" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span></div>
+</div>
+
+<!-- Conversation modal -->
+<div id="conv-modal" onclick="closeConv(event)">
+  <div id="conv-box">
+    <div id="conv-header">
+      <span id="conv-title"></span>
+      <span id="conv-close" onclick="document.getElementById('conv-modal').classList.remove('open')">✕</span>
     </div>
+    <div id="conv-messages"></div>
+  </div>
+</div>
 
-    <!-- Stats -->
-    <div class="stats-grid" style="margin-bottom:16px">
-      <div class="card p-4">
-        <div style="font-size:10px;color:var(--text-muted)">ACTIVOS</div>
-        <div id="stat-total" style="font-size:2rem;font-weight:bold;color:#34d399;margin-top:4px">0</div>
-        <div class="stat-bar"><div id="bar-total" class="stat-bar-fill" style="background:#34d399;width:0%"></div></div>
-      </div>
-      <div class="card p-4">
-        <div style="font-size:10px;color:var(--text-muted)">TRABAJANDO</div>
-        <div id="stat-working" style="font-size:2rem;font-weight:bold;color:#60a5fa;margin-top:4px">0</div>
-        <div class="stat-bar"><div id="bar-working" class="stat-bar-fill" style="background:#60a5fa;width:0%"></div></div>
-      </div>
-      <div class="card p-4">
-        <div style="font-size:10px;color:var(--text-muted)">ESPERANDO</div>
-        <div id="stat-waiting" style="font-size:2rem;font-weight:bold;color:#fbbf24;margin-top:4px">0</div>
-        <div class="stat-bar"><div id="bar-waiting" class="stat-bar-fill" style="background:#fbbf24;width:0%"></div></div>
-      </div>
+<div class="page">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <div>
+      <h1 style="color:#60a5fa;letter-spacing:0.2em;font-size:1.1rem;font-weight:bold;margin:0">AGENT-MESH</h1>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px"><span id="last-update"></span></div>
     </div>
-
-    <!-- Graph + Feed -->
-    <div class="two-col" style="margin-bottom:16px">
-      <div>
-        <div class="section-label">RED DE AGENTES</div>
-        <div id="graph" style="height:340px"></div>
-        <div id="no-peers" style="text-align:center;padding:32px 0;color:var(--text-muted)">
-          Sin agentes activos · Abre un agente en otro directorio
-        </div>
-      </div>
-      <div>
-        <div class="section-label">ACTIVIDAD RECIENTE</div>
-        <div id="activity-feed" style="height:340px"></div>
-      </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <button class="icon-btn" onclick="exportActivity()">⬇ <span data-i18n="export"></span></button>
+      <button class="icon-btn" id="notif-btn" onclick="requestNotifications()">🔔</button>
+      <button class="icon-btn" onclick="toggleLang()">🌐 <span id="lang-label">ES</span></button>
+      <button class="icon-btn" onclick="toggleTheme()"><span id="theme-icon">☀️</span></button>
+      <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;animation:pulse 2s infinite"></span>
+      <span style="font-size:11px;color:var(--text-muted)">live</span>
     </div>
-
-    <!-- Peer cards -->
-    <div class="section-label">AGENTES</div>
-    <div id="peer-cards" class="peers-grid"></div>
   </div>
 
-  <script>
-    const AGENT_COLORS = {
-      'claude-code': '#f97316',
-      'gemini-cli':  '#3b82f6',
-      'opencode':    '#8b5cf6',
-      'copilot':     '#22c55e',
-      'codex':       '#ec4899',
-      'unknown':     '#64748b',
-    };
+  <!-- Stats -->
+  <div class="stats-grid" style="margin-bottom:12px">
+    <div class="card p-4">
+      <div style="font-size:10px;color:var(--text-muted)" data-i18n="active"></div>
+      <div id="stat-total" style="font-size:2rem;font-weight:bold;color:#34d399;margin-top:4px">0</div>
+      <div class="stat-bar"><div id="bar-total" class="stat-bar-fill" style="background:#34d399;width:0%"></div></div>
+    </div>
+    <div class="card p-4">
+      <div style="font-size:10px;color:var(--text-muted)" data-i18n="working"></div>
+      <div id="stat-working" style="font-size:2rem;font-weight:bold;color:#60a5fa;margin-top:4px">0</div>
+      <div class="stat-bar"><div id="bar-working" class="stat-bar-fill" style="background:#60a5fa;width:0%"></div></div>
+    </div>
+    <div class="card p-4">
+      <div style="font-size:10px;color:var(--text-muted)" data-i18n="waiting"></div>
+      <div id="stat-waiting" style="font-size:2rem;font-weight:bold;color:#fbbf24;margin-top:4px">0</div>
+      <div class="stat-bar"><div id="bar-waiting" class="stat-bar-fill" style="background:#fbbf24;width:0%"></div></div>
+    </div>
+  </div>
 
-    const AGENT_LABELS = {
-      'claude-code': 'CC',
-      'gemini-cli':  'GM',
-      'opencode':    'OC',
-      'copilot':     'CP',
-      'codex':       'CX',
-      'unknown':     '?',
-    };
+  <!-- Metrics -->
+  <div class="metrics-grid" style="margin-bottom:16px">
+    <div class="card p-4">
+      <div style="font-size:10px;color:var(--text-muted)" data-i18n="totalMessages"></div>
+      <div id="metric-msgs" style="font-size:1.5rem;font-weight:bold;color:#a78bfa;margin-top:4px">0</div>
+    </div>
+    <div class="card p-4">
+      <div style="font-size:10px;color:var(--text-muted)" data-i18n="lastHour"></div>
+      <div id="metric-hour" style="font-size:1.5rem;font-weight:bold;color:#f472b6;margin-top:4px">0</div>
+    </div>
+    <div class="card p-4">
+      <div style="font-size:10px;color:var(--text-muted)" data-i18n="mostActive"></div>
+      <div id="metric-active" style="font-size:12px;font-weight:bold;color:#34d399;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">–</div>
+    </div>
+    <div class="card p-4">
+      <div style="font-size:10px;color:var(--text-muted)" data-i18n="connections"></div>
+      <div id="metric-conns" style="font-size:1.5rem;font-weight:bold;color:#60a5fa;margin-top:4px">0</div>
+    </div>
+  </div>
 
-    const AGENT_ICONS = {
-      'claude-code': '/icons/claude-code.ico',
-      'gemini-cli':  '/icons/gemini-cli.ico',
-      'opencode':    '/icons/opencode.png',
-      'copilot':     '/icons/copilot.jpg',
-      'codex':       '/icons/codex.png',
-    };
+  <!-- Graph + Feed -->
+  <div class="two-col" style="margin-bottom:16px">
+    <div>
+      <div class="section-label" data-i18n="agentNetwork"></div>
+      <div id="graph" style="height:340px"></div>
+      <div id="no-peers" style="text-align:center;padding:32px 0;color:var(--text-muted)" data-i18n="noAgents"></div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:6px" data-i18n="clickEdgeHint"></div>
+    </div>
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="section-label" style="margin-bottom:0" data-i18n="recentActivity"></div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <span style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text-muted)"><span style="width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block"></span><span data-i18n="legendJoin"></span></span>
+          <span style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text-muted)"><span style="width:8px;height:8px;border-radius:50%;background:#3b82f6;display:inline-block"></span><span data-i18n="legendMessage"></span></span>
+          <span style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text-muted)"><span style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block"></span><span data-i18n="legendLeave"></span></span>
+        </div>
+      </div>
+      <div id="activity-feed" style="height:340px"></div>
+    </div>
+  </div>
 
-    let cy = null;
-    let lastPeers = [];
+  <!-- Peers -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div class="section-label" style="margin-bottom:0" data-i18n="agents"></div>
+    <span id="peer-count" style="font-size:10px;color:var(--text-muted)"></span>
+  </div>
+  <input class="search-input" id="search" type="text" oninput="applyFilter()">
+  <div id="peer-cards" class="peers-grid"></div>
+  <div id="no-peers-filter" style="display:none;text-align:center;padding:24px;color:var(--text-muted);font-size:12px" data-i18n="noResults"></div>
 
-    function initGraph() {
-      cy = cytoscape({
-        container: document.getElementById('graph'),
-        style: [
-          {
-            selector: 'node',
-            style: {
-              'background-color': 'data(bgcolor)',
-              'background-image': 'data(icon)',
-              'background-fit': 'contain',
-              'background-clip': 'none',
-              'background-opacity': 0,
-              'border-width': 0,
-              'label': 'data(label)',
-              'color': '#94a3b8',
-              'text-valign': 'bottom',
-              'text-halign': 'center',
-              'text-margin-y': 8,
-              'font-size': '10px',
-              'font-weight': 'bold',
-              'font-family': 'monospace',
-              'width': 72,
-              'height': 72,
-              'text-wrap': 'wrap',
-              'text-max-width': '160px',
-            }
-          },
-          {
-            selector: 'node[icon = "none"]',
-            style: {
-              'background-color': 'data(color)',
-              'background-opacity': 1,
-              'background-image': 'none',
-              'border-width': 0,
-              'color': '#fff',
-              'text-valign': 'center',
-              'text-halign': 'center',
-              'text-margin-y': 0,
-              'label': 'data(initials)',
-              'font-size': '14px',
-            }
-          },
-          {
-            selector: 'node[status = "working"]',
-            style: {
-              'border-width': 2,
-              'border-color': '#10b981',
-              'background-opacity': 0.08,
-              'background-color': '#10b981',
-            }
-          },
-          {
-            selector: 'node[status = "waiting"]',
-            style: {
-              'border-width': 2,
-              'border-color': '#f59e0b',
-              'background-opacity': 0.08,
-              'background-color': '#f59e0b',
-            }
-          },
-          {
-            selector: 'edge',
-            style: {
-              'width': 1.5,
-              'line-color': '#334155',
-              'target-arrow-color': '#475569',
-              'target-arrow-shape': 'triangle',
-              'curve-style': 'bezier',
-              'opacity': 0.5,
-              'line-style': 'dashed',
-              'line-dash-pattern': [4, 4],
-            }
-          },
-          {
-            selector: 'edge.active',
-            style: {
-              'line-color': '#3b82f6',
-              'target-arrow-color': '#3b82f6',
-              'opacity': 0.9,
-              'line-style': 'solid',
-              'width': 2,
-            }
-          }
-        ],
-        layout: { name: 'grid' },
-        userZoomingEnabled: true,
-        userPanningEnabled: true,
-      });
+</div>
+
+<script>
+// ── XSS protection ─────────────────────────────────────────────────────────
+// C2: escape all user-controlled data before injecting into innerHTML
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+const TR = {
+  en: {
+    active:'ACTIVE', working:'WORKING', waiting:'WAITING',
+    agentNetwork:'AGENT NETWORK', recentActivity:'RECENT ACTIVITY', agents:'AGENTS',
+    noAgents:'No active agents · Open an agent in another directory',
+    totalMessages:'TOTAL MESSAGES', lastHour:'LAST HOUR', mostActive:'MOST ACTIVE', connections:'CONNECTIONS',
+    copy:'copy', export:'Export', noResults:'No agents match the search',
+    searchPlaceholder:'Filter by role, agent or path…',
+    legendJoin:'joined', legendMessage:'message', legendLeave:'left',
+    statusWorking:'working', statusWaiting:'waiting', statusIdle:'idle',
+    uptime: m=>`${m}m`, msgHistory:'messages', noMsgs:'no messages',
+    justNow:'just now', minutesAgo:m=>`${m}m ago`, hoursAgo:h=>`${h}h ago`,
+    healthOk:'Healthy', healthWarn:'Slow heartbeat', healthDead:'Unresponsive',
+    convTitle:(a,b)=>`Conversation: ${a} ↔ ${b}`, convEmpty:'No messages between these agents',
+    clickEdgeHint:'Click a connection line to view the conversation',
+  },
+  es: {
+    active:'ACTIVOS', working:'TRABAJANDO', waiting:'ESPERANDO',
+    agentNetwork:'RED DE AGENTES', recentActivity:'ACTIVIDAD RECIENTE', agents:'AGENTES',
+    noAgents:'Sin agentes activos · Abre un agente en otro directorio',
+    totalMessages:'MENSAJES TOTALES', lastHour:'ÚLTIMA HORA', mostActive:'MÁS ACTIVO', connections:'CONEXIONES',
+    copy:'copiar', export:'Exportar', noResults:'Ningún agente coincide',
+    searchPlaceholder:'Filtrar por rol, agente o ruta…',
+    legendJoin:'conectado', legendMessage:'mensaje', legendLeave:'desconectado',
+    statusWorking:'trabajando', statusWaiting:'esperando', statusIdle:'inactivo',
+    uptime:m=>`${m}m`, msgHistory:'mensajes', noMsgs:'sin mensajes',
+    justNow:'ahora', minutesAgo:m=>`hace ${m}m`, hoursAgo:h=>`hace ${h}h`,
+    healthOk:'Activo', healthWarn:'Heartbeat lento', healthDead:'Sin respuesta',
+    convTitle:(a,b)=>`Conversación: ${a} ↔ ${b}`, convEmpty:'Sin mensajes entre estos agentes',
+    clickEdgeHint:'Haz click en una línea para ver la conversación',
+  },
+};
+
+let currentLang = localStorage.getItem('lang') || 'en';
+const t = (key, ...a) => { const v = TR[currentLang][key]; return typeof v === 'function' ? v(...a) : (v ?? key); };
+
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.getElementById('search').placeholder = t('searchPlaceholder');
+  document.getElementById('lang-label').textContent = currentLang === 'en' ? 'ES' : 'EN';
+  document.documentElement.lang = currentLang;
+  if (lastPeers.length) renderPeerCards(lastPeers);
+}
+function toggleLang() { currentLang = currentLang === 'en' ? 'es' : 'en'; localStorage.setItem('lang', currentLang); applyI18n(); }
+
+// ── Theme ──────────────────────────────────────────────────────────────────
+let currentTheme = localStorage.getItem('theme') || 'dark';
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  document.getElementById('theme-icon').textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+  if (cy) updateGraphColors();
+}
+function toggleTheme() { currentTheme = currentTheme === 'dark' ? 'light' : 'dark'; localStorage.setItem('theme', currentTheme); applyTheme(); }
+function gColors() {
+  return currentTheme === 'dark'
+    ? { node:'#94a3b8', edge:'#334155', arrow:'#475569', active:'#3b82f6' }
+    : { node:'#475569', edge:'#94a3b8', arrow:'#64748b', active:'#2563eb' };
+}
+function updateGraphColors() {
+  const c = gColors();
+  cy.style()
+    .selector('node').style({ color: c.node })
+    .selector('edge').style({ 'line-color': c.edge, 'target-arrow-color': c.arrow })
+    .selector('edge.active').style({ 'line-color': c.active, 'target-arrow-color': c.active })
+    .update();
+}
+
+// ── Agent data ─────────────────────────────────────────────────────────────
+const AGENT_COLORS = { 'claude-code':'#f97316','gemini-cli':'#3b82f6','opencode':'#8b5cf6','copilot':'#22c55e','codex':'#ec4899','unknown':'#64748b' };
+const AGENT_LABELS = { 'claude-code':'CC','gemini-cli':'GM','opencode':'OC','copilot':'CP','codex':'CX','unknown':'?' };
+const AGENT_ICONS  = { 'claude-code':'/icons/claude-code.ico','gemini-cli':'/icons/gemini-cli.ico','opencode':'/icons/opencode.png','copilot':'/icons/copilot.jpg','codex':'/icons/codex.png' };
+
+let cy = null;
+let lastPeers = [];
+let lastPeerCount = 0;
+let filterText = '';
+let allActivityLines = [];
+let recentEdgeTimes = {};
+const RECENT_MS = 30_000;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  const h = Math.floor(diff / 3600000);
+  if (diff < 30000) return t('justNow');
+  if (h >= 1) return t('hoursAgo', h);
+  return t('minutesAgo', m);
+}
+function statusLabel(s) {
+  return s === 'working' ? t('statusWorking') : s === 'waiting' ? t('statusWaiting') : t('statusIdle');
+}
+function healthInfo(lastHeartbeat) {
+  const age = Date.now() - new Date(lastHeartbeat).getTime();
+  if (age < 20000) return { cls: 'health-ok',   tip: t('healthOk') };
+  if (age < 45000) return { cls: 'health-warn',  tip: t('healthWarn') };
+  return                  { cls: 'health-dead',  tip: t('healthDead') };
+}
+
+// ── Notifications ──────────────────────────────────────────────────────────
+let notificationsEnabled = false;
+let initialized = false;         // primer ciclo de carga no notifica
+let knownPeerIds = new Set();
+let knownMsgCount = -1;
+
+async function requestNotifications() {
+  if (!('Notification' in window)) return;
+  const perm = await Notification.requestPermission();
+  notificationsEnabled = perm === 'granted';
+  const btn = document.getElementById('notif-btn');
+  btn.textContent = notificationsEnabled ? '🔔✓' : '🔕';
+  btn.title = notificationsEnabled ? t('notifEnabled') : t('notifDenied');
+}
+
+function notify(title, body) {
+  if (!notificationsEnabled || !initialized) return;
+  if (document.visibilityState === 'visible') return;
+  new Notification(title, { body, icon: '/icons/claude-code.ico' });
+}
+
+function checkNotifications(peers) {
+  const msgLines = allActivityLines.filter(l => l.includes('|message|'));
+
+  if (!initialized) {
+    // primer ciclo: solo registrar estado actual sin notificar
+    peers.forEach(p => knownPeerIds.add(p.id));
+    knownMsgCount = msgLines.length;
+    initialized = true;
+    return;
+  }
+
+  peers.forEach(p => {
+    if (!knownPeerIds.has(p.id)) {
+      knownPeerIds.add(p.id);
+      notify('Agent Mesh', `${p.agent} joined — ${p.role}`);
     }
+  });
 
-    let lastPeerCount = 0;
+  if (knownMsgCount >= 0 && msgLines.length > knownMsgCount) {
+    const newest = msgLines[0]?.split('|').slice(2).join(' · ').slice(0, 80) ?? '';
+    notify('Agent Mesh', newest || 'New message received');
+  }
+  knownMsgCount = msgLines.length;
+}
 
-    function updateGraph(peers) {
-      if (!cy) return;
+// ── Metrics ────────────────────────────────────────────────────────────────
+function updateMetrics(peers, connections) {
+  const msgLines = allActivityLines.filter(l => l.includes('|message|'));
+  const hourAgo  = Date.now() - 3_600_000;
+  const lastHour = msgLines.filter(l => new Date(l.split('|')[0]).getTime() > hourAgo).length;
 
-      const currentIds = new Set(peers.map(p => p.id));
-      const graphIds = new Set(cy.nodes().map(n => n.id()));
-      const countChanged = peers.length !== lastPeerCount;
+  // Most active peer by message count
+  const counts = {};
+  msgLines.forEach(l => {
+    const data = l.split('|')[2] ?? '';
+    const m = data.match(/^(peer_\w+)→/);
+    if (m) counts[m[1]] = (counts[m[1]] ?? 0) + 1;
+  });
+  const topId  = Object.entries(counts).sort((a,b) => b[1]-a[1])[0];
+  const topPeer = topId ? peers.find(p => p.id === topId[0]) : null;
+  const topLabel = topPeer ? `${topPeer.role} (${topId[1]})` : (topId ? `${topId[0].slice(0,10)} (${topId[1]})` : '–');
 
-      cy.nodes().forEach(n => {
-        if (!currentIds.has(n.id())) cy.remove(n);
-      });
+  document.getElementById('metric-msgs').textContent   = msgLines.length;
+  document.getElementById('metric-hour').textContent   = lastHour;
+  document.getElementById('metric-active').textContent = topLabel;
+  document.getElementById('metric-conns').textContent  = connections.length;
+}
 
-      for (const peer of peers) {
-        const label = peer.role;
-        const color = AGENT_COLORS[peer.agent] ?? '#64748b';
-        const icon = AGENT_ICONS[peer.agent] ?? 'none';
-        const bgcolor = icon !== 'none' ? 'transparent' : color;
-        const initials = (AGENT_LABELS[peer.agent] ?? '?');
-        if (graphIds.has(peer.id)) {
-          cy.$(`#${peer.id}`).data({ label, status: peer.status, color, bgcolor, icon, initials });
-        } else {
-          cy.add({ data: { id: peer.id, label, status: peer.status, color, bgcolor, icon, initials } });
-        }
-      }
+// ── Export ─────────────────────────────────────────────────────────────────
+function exportActivity() {
+  const blob = new Blob([allActivityLines.join('\n')], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `agent-mesh-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.click();
+}
 
-      // Eliminar edges de peers que ya no existen
-      cy.edges().forEach(e => {
-        if (!currentIds.has(e.data('source')) || !currentIds.has(e.data('target'))) {
-          cy.remove(e);
-        }
-      });
+// ── Conversation modal ─────────────────────────────────────────────────────
+let allConnections = [];
 
-      // Solo re-layoutear si cambió la cantidad de peers
-      if (countChanged) {
-        lastPeerCount = peers.length;
-        const layoutName = peers.length <= 1 ? 'grid' : 'circle';
-        cy.layout({ name: layoutName, padding: 80, animate: false, spacingFactor: 1.6 }).run();
-        cy.resize();
-      }
+function openConversation(idA, idB) {
+  const peerA = lastPeers.find(p => p.id === idA);
+  const peerB = lastPeers.find(p => p.id === idB);
+  const labelA = peerA?.role ?? idA.slice(0,10);
+  const labelB = peerB?.role ?? idB.slice(0,10);
+
+  document.getElementById('conv-title').textContent = t('convTitle', labelA, labelB);
+
+  const msgs = allActivityLines
+    .filter(l => {
+      const parts = l.split('|');
+      if (parts[1]?.trim() !== 'message') return false;
+      const data = parts[2] ?? '';
+      return (data.includes(idA) && data.includes(idB));
+    })
+    .reverse(); // chronological order
+
+  const container = document.getElementById('conv-messages');
+  if (msgs.length === 0) {
+    container.innerHTML = `<div class="conv-empty">${t('convEmpty')}</div>`;
+  } else {
+    container.innerHTML = msgs.map(l => {
+      const parts  = l.split('|');
+      const ts     = parts[0];
+      const data   = parts[2] ?? '';
+      const m      = data.match(/^(peer_\w+)→(peer_\w+)\|(\w+)\|(.*)/s);
+      if (!m) return '';
+      const fromId  = m[1], type = m[3], content = m[4]?.slice(0,300) ?? '';
+      const outgoing = fromId === idA;
+      const sender   = outgoing ? labelA : labelB;
+      return `<div class="conv-msg ${outgoing ? 'outgoing' : 'incoming'}">
+        <div class="conv-msg-meta">${escapeHtml(sender)} · ${escapeHtml(type)} · ${timeAgo(ts)}</div>
+        <div class="conv-msg-text">${escapeHtml(content)}</div>
+      </div>`;
+    }).join('');
+    container.scrollTop = container.scrollHeight;
+  }
+
+  document.getElementById('conv-modal').classList.add('open');
+}
+
+function closeConv(e) {
+  if (e.target === document.getElementById('conv-modal')) {
+    document.getElementById('conv-modal').classList.remove('open');
+  }
+}
+
+// ── Graph ──────────────────────────────────────────────────────────────────
+function initGraph() {
+  const c = gColors();
+  cy = cytoscape({
+    container: document.getElementById('graph'),
+    style: [
+      { selector: 'node', style: {
+          'background-color':'data(bgcolor)', 'background-image':'data(icon)',
+          'background-fit':'contain', 'background-clip':'none', 'background-opacity':0,
+          'border-width':0, label:'data(label)', color:c.node,
+          'text-valign':'bottom', 'text-halign':'center', 'text-margin-y':8,
+          'font-size':'10px', 'font-weight':'bold', 'font-family':'monospace',
+          width:72, height:72, 'text-wrap':'wrap', 'text-max-width':'160px',
+      }},
+      { selector:'node[icon = "none"]', style:{
+          'background-color':'data(color)', 'background-opacity':1, 'background-image':'none',
+          'border-width':0, color:'#fff', 'text-valign':'center', 'text-halign':'center',
+          'text-margin-y':0, label:'data(initials)', 'font-size':'14px',
+      }},
+      { selector:'node[status = "working"]', style:{ 'border-width':2,'border-color':'#10b981','background-opacity':0.08,'background-color':'#10b981' }},
+      { selector:'node[status = "waiting"]', style:{ 'border-width':2,'border-color':'#f59e0b','background-opacity':0.08,'background-color':'#f59e0b' }},
+      { selector:'node.highlighted', style:{ 'border-width':3,'border-color':'#60a5fa' }},
+      { selector:'edge', style:{
+          width:1.5, 'line-color':c.edge, 'target-arrow-color':c.arrow,
+          'target-arrow-shape':'triangle', 'curve-style':'bezier',
+          opacity:0.5, 'line-style':'dashed', 'line-dash-pattern':[4,4],
+      }},
+      { selector:'edge.active', style:{
+          'line-color':c.active, 'target-arrow-color':c.active,
+          opacity:0.9, 'line-style':'solid', width:2.5,
+      }},
+      { selector:'edge:hover', style:{ opacity:1, width:3, cursor:'pointer' }},
+    ],
+    layout:{ name:'grid' },
+    userZoomingEnabled:true, userPanningEnabled:true,
+  });
+
+  // Tooltip on nodes
+  const tooltip = document.getElementById('graph-tooltip');
+  cy.on('mouseover','node', e => {
+    const d = e.target.data();
+    document.getElementById('tt-role').textContent   = d.label || d.id;
+    document.getElementById('tt-agent').textContent  = d.agent || '–';
+    document.getElementById('tt-status').textContent = statusLabel(d.status || 'idle');
+    document.getElementById('tt-branch').textContent = d.branch || '–';
+    document.getElementById('tt-path').textContent   = d.path || '–';
+    tooltip.style.display = 'block';
+  });
+  cy.on('mouseout','node', () => { tooltip.style.display = 'none'; });
+  cy.on('mousemove', e => {
+    tooltip.style.left = (e.originalEvent.clientX + 16) + 'px';
+    tooltip.style.top  = (e.originalEvent.clientY - 10) + 'px';
+  });
+
+  // Click node → highlight card
+  cy.on('tap','node', e => {
+    const id = e.target.id();
+    document.querySelectorAll('.peer-card').forEach(c => c.classList.remove('highlighted'));
+    cy.nodes().removeClass('highlighted');
+    e.target.addClass('highlighted');
+    const card = document.querySelector(`.peer-card[data-peer-id="${id}"]`);
+    if (card) { card.classList.add('highlighted'); card.scrollIntoView({ behavior:'smooth', block:'nearest' }); }
+  });
+
+  // Click edge → open conversation
+  cy.on('tap','edge', e => {
+    const d = e.target.data();
+    openConversation(d.source, d.target);
+  });
+
+  cy.on('tap', e => {
+    if (e.target === cy) {
+      cy.nodes().removeClass('highlighted');
+      document.querySelectorAll('.peer-card').forEach(c => c.classList.remove('highlighted'));
     }
+  });
+}
 
-    function statusBadge(status) {
-      return `<span class="status-badge status-${status}">${status}</span>`;
-    }
+function updateGraph(peers) {
+  if (!cy) return;
+  const currentIds  = new Set(peers.map(p => p.id));
+  const graphIds    = new Set(cy.nodes().map(n => n.id()));
+  const countChanged = peers.length !== lastPeerCount;
 
-    function renderPeerCards(peers) {
-      // Orden estable por fecha de inicio para que no cambie entre updates
-      const sorted = [...peers].sort((a, b) => a.started_at.localeCompare(b.started_at));
-      const container = document.getElementById('peer-cards');
-      if (sorted.length === 0) {
-        container.innerHTML = '';
-        document.getElementById('no-peers').style.display = 'block';
-        return;
-      }
-      document.getElementById('no-peers').style.display = 'none';
+  cy.nodes().forEach(n => { if (!currentIds.has(n.id())) cy.remove(n); });
 
-      container.innerHTML = sorted.map(peer => {
-        const color = AGENT_COLORS[peer.agent] ?? '#64748b';
-        const iconHtml = AGENT_ICONS[peer.agent]
-          ? `<img src="${AGENT_ICONS[peer.agent]}" style="width:32px;height:32px;object-fit:contain;flex-shrink:0" />`
-          : `<div style="background:${color};width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:bold">${AGENT_LABELS[peer.agent] ?? '?'}</span></div>`;
+  for (const peer of peers) {
+    const color    = AGENT_COLORS[peer.agent] ?? '#64748b';
+    const icon     = AGENT_ICONS[peer.agent]  ?? 'none';
+    const bgcolor  = icon !== 'none' ? 'transparent' : color;
+    const initials = AGENT_LABELS[peer.agent] ?? '?';
+    const data     = { label:peer.role, status:peer.status, color, bgcolor, icon, initials, agent:peer.agent, branch:peer.git_branch||'', path:peer.path||'' };
+    if (graphIds.has(peer.id)) cy.$(`#${peer.id}`).data(data);
+    else cy.add({ data:{ id:peer.id, ...data } });
+  }
 
-        const uptime = peer.started_at
-          ? Math.floor((Date.now() - new Date(peer.started_at).getTime()) / 60000) + 'm'
-          : '';
+  cy.edges().forEach(e => {
+    if (!currentIds.has(e.data('source')) || !currentIds.has(e.data('target'))) cy.remove(e);
+  });
 
-        return `
-          <div class="peer-card">
-            <div class="flex items-center justify-between mb-3">
-              <div class="flex items-center gap-2">
-                ${iconHtml}
-                <div>
-                  <div class="font-semibold text-sm">${peer.role}</div>
-                  <div style="font-size:10px;color:var(--text-muted)">${peer.agent} ${peer.agent_version !== 'unknown' ? peer.agent_version : ''}</div>
-                </div>
-              </div>
-              ${statusBadge(peer.status)}
+  const now = Date.now();
+  cy.edges().forEach(e => {
+    const age = now - (recentEdgeTimes[e.id()] ?? 0);
+    if (age < RECENT_MS) e.addClass('active'); else e.removeClass('active');
+  });
+
+  if (countChanged) {
+    lastPeerCount = peers.length;
+    cy.layout({ name:peers.length<=1?'grid':'circle', padding:80, animate:false, spacingFactor:1.6 }).run();
+    cy.resize();
+  }
+}
+
+// ── Filter ─────────────────────────────────────────────────────────────────
+function applyFilter() {
+  filterText = document.getElementById('search').value.toLowerCase();
+  renderPeerCards(lastPeers);
+}
+
+// ── Peer cards ─────────────────────────────────────────────────────────────
+function statusBadge(status) {
+  return `<span class="status-badge status-${status}">${statusLabel(status)}</span>`;
+}
+
+function peerMessages(peerId) {
+  return allActivityLines.filter(l => {
+    const parts = l.split('|');
+    return parts[1]?.trim() === 'message' && (parts[2] ?? '').includes(peerId);
+  }).slice(0, 8);
+}
+
+function renderPeerCards(peers) {
+  const sorted   = [...peers].sort((a,b) => a.started_at.localeCompare(b.started_at));
+  const filtered = filterText ? sorted.filter(p => [p.role,p.agent,p.path,p.git_branch].join(' ').toLowerCase().includes(filterText)) : sorted;
+
+  const container = document.getElementById('peer-cards');
+  const noFilter  = document.getElementById('no-peers-filter');
+  document.getElementById('peer-count').textContent = filtered.length !== sorted.length ? `${filtered.length} / ${sorted.length}` : `${sorted.length}`;
+
+  if (sorted.length === 0) { container.innerHTML=''; document.getElementById('no-peers').style.display='block'; noFilter.style.display='none'; return; }
+  document.getElementById('no-peers').style.display = 'none';
+  if (filtered.length === 0) { container.innerHTML=''; noFilter.style.display='block'; return; }
+  noFilter.style.display = 'none';
+
+  container.innerHTML = filtered.map(peer => {
+    const color    = AGENT_COLORS[peer.agent] ?? '#64748b';
+    const iconHtml = AGENT_ICONS[peer.agent]
+      ? `<img src="${AGENT_ICONS[peer.agent]}" style="width:32px;height:32px;object-fit:contain;flex-shrink:0"/>`
+      : `<div style="background:${color};width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:bold">${AGENT_LABELS[peer.agent]??'?'}</span></div>`;
+    const uptime = peer.started_at ? Math.floor((Date.now()-new Date(peer.started_at).getTime())/60000) : null;
+    const health = healthInfo(peer.last_heartbeat);
+    const msgs   = peerMessages(peer.id);
+    const msgsHtml = msgs.length
+      ? msgs.map(l => { const p=l.split('|'); return `<div class="msg-item">${timeAgo(p[0])} · ${escapeHtml(p.slice(2).join(' · ').slice(0,80))}</div>`; }).join('')
+      : `<div style="font-size:10px;color:var(--text-muted);font-style:italic">${t('noMsgs')}</div>`;
+
+    // C2: use JSON.stringify for peer.id in JS onclick contexts to prevent injection
+    const safeId = JSON.stringify(peer.id);
+    return `<div class="peer-card" data-peer-id="${escapeHtml(peer.id)}" onclick="highlightFromCard(${safeId})">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          ${iconHtml}
+          <div>
+            <div class="font-semibold text-sm" style="display:flex;align-items:center;gap:5px">
+              ${escapeHtml(peer.role)}
+              <span class="health-dot ${health.cls}" title="${escapeHtml(health.tip)}"></span>
             </div>
-            <div class="space-y-1" style="font-size:11px;color:var(--text-secondary)">
-              <div style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${peer.path}</div>
-              ${peer.git_branch ? `<div style="color:#60a5fa">⎇ ${peer.git_branch}</div>` : ''}
-              ${peer.current_task ? `<div style="color:var(--text-primary);margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px">${peer.current_task}</div>` : ''}
-            </div>
-            <div class="flex items-center justify-between mt-3" style="border-top:1px solid var(--border);padding-top:8px">
-              <span style="color:var(--text-muted);font-size:10px">${peer.id}</span>
-              <div class="flex items-center gap-2">
-                ${uptime ? `<span style="color:var(--text-muted);font-size:10px">${uptime}</span>` : ''}
-                <button class="copy-btn" onclick="navigator.clipboard.writeText('${peer.id}')">copy</button>
-              </div>
-            </div>
+            <div style="font-size:10px;color:var(--text-muted)">${escapeHtml(peer.agent)}${peer.agent_version!=='unknown'?' '+escapeHtml(peer.agent_version):''}</div>
           </div>
-        `;
-      }).join('');
+        </div>
+        ${statusBadge(peer.status)}
+      </div>
+      <div style="font-size:11px;color:var(--text-secondary)">
+        <div style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(peer.path)}</div>
+        ${peer.git_branch?`<div style="color:#60a5fa">⎇ ${escapeHtml(peer.git_branch)}</div>`:''}
+        ${peer.current_task?`<div style="color:var(--text-primary);margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px">${escapeHtml(peer.current_task)}</div>`:''}
+      </div>
+      <div class="flex items-center justify-between mt-3" style="border-top:1px solid var(--border);padding-top:8px">
+        <span style="color:var(--text-muted);font-size:10px">${escapeHtml(peer.id)}</span>
+        <div class="flex items-center gap-2">
+          ${uptime!==null?`<span style="color:var(--text-muted);font-size:10px">${t('uptime',uptime)}</span>`:''}
+          <button class="copy-btn" onclick="event.stopPropagation();navigator.clipboard.writeText(${safeId})">${t('copy')}</button>
+        </div>
+      </div>
+      <span class="msg-toggle" onclick="event.stopPropagation();toggleHistory(${safeId})">${t('msgHistory')} (${msgs.length})</span>
+      <div class="msg-history" id="hist-${escapeHtml(peer.id)}">${msgsHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function highlightFromCard(peerId) {
+  document.querySelectorAll('.peer-card').forEach(c => c.classList.remove('highlighted'));
+  cy?.nodes().removeClass('highlighted');
+  document.querySelector(`.peer-card[data-peer-id="${peerId}"]`)?.classList.add('highlighted');
+  cy?.$(`#${peerId}`)?.addClass('highlighted');
+}
+
+function toggleHistory(peerId) {
+  document.getElementById(`hist-${peerId}`)?.classList.toggle('open');
+}
+
+// ── Activity feed ──────────────────────────────────────────────────────────
+function renderActivity(lines) {
+  const feed = document.getElementById('activity-feed');
+  feed.innerHTML = lines.slice(0,40).map(line => {
+    const parts = line.split('|');
+    const type  = parts[1]?.trim() ?? '';
+    let cls = 'feed-item';
+    if (type === 'message') cls += ' message';
+    else if (type === 'peer_join') cls += ' join';
+    else if (type === 'peer_leave' || type === 'peer_timeout') cls += ' leave';
+    const time = parts[0] ? timeAgo(parts[0]) : '';
+    const desc = parts.slice(1).map(p=>p.trim()).filter(Boolean).join(' · ');
+    return `<div class="${cls}"><span class="feed-time">${time}</span><span class="feed-desc">${escapeHtml(desc)}</span></div>`;
+  }).join('');
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+function updateStats(data) {
+  const total=data.total??0, working=data.working??0, waiting=data.waiting??0;
+  document.getElementById('stat-total').textContent   = total;
+  document.getElementById('stat-working').textContent = working;
+  document.getElementById('stat-waiting').textContent = waiting;
+  document.getElementById('last-update').textContent  = new Date().toLocaleTimeString();
+  const pct = v => total>0 ? Math.round((v/total)*100) : 0;
+  document.getElementById('bar-total').style.width   = total>0?'100%':'0%';
+  document.getElementById('bar-working').style.width = pct(working)+'%';
+  document.getElementById('bar-waiting').style.width = pct(waiting)+'%';
+}
+
+// ── Data fetching ──────────────────────────────────────────────────────────
+async function fetchConnections() {
+  try {
+    const pairs = await fetch('/api/connections').then(r=>r.json());
+    allConnections = pairs;
+    if (!cy) return;
+    for (const {a,b} of pairs) {
+      const edgeId = [a,b].sort().join('--');
+      if (!cy.$(`#${edgeId}`).length && cy.$(`#${a}`).length && cy.$(`#${b}`).length) {
+        cy.add({ data:{ id:edgeId, source:a, target:b } });
+      }
     }
-
-    function renderActivity(lines) {
-      const feed = document.getElementById('activity-feed');
-      feed.innerHTML = lines.slice(0, 40).map(line => {
-        const parts = line.split('|');
-        const type = parts[1]?.trim() ?? '';
-        let cls = 'feed-item';
-        if (type === 'message') cls += ' message';
-        else if (type === 'peer_join') cls += ' join';
-        else if (type === 'peer_leave' || type === 'peer_timeout') cls += ' leave';
-
-        const time = parts[0] ? new Date(parts[0]).toLocaleTimeString() : '';
-        const desc = parts.slice(1).map(p => p.trim()).filter(Boolean).join(' · ');
-        return `<div class="${cls}">
-          <span class="feed-time">${time}</span>
-          <span class="feed-desc">${desc}</span>
-        </div>`;
-      }).join('');
-    }
-
-    function updateStats(data) {
-      const total = data.total ?? 0;
-      const working = data.working ?? 0;
-      const waiting = data.waiting ?? 0;
-
-      document.getElementById('stat-total').textContent = total;
-      document.getElementById('stat-working').textContent = working;
-      document.getElementById('stat-waiting').textContent = waiting;
-      document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
-
-      const pct = v => total > 0 ? Math.round((v / total) * 100) : 0;
-      document.getElementById('bar-total').style.width = total > 0 ? '100%' : '0%';
-      document.getElementById('bar-working').style.width = pct(working) + '%';
-      document.getElementById('bar-waiting').style.width = pct(waiting) + '%';
-    }
-
-    async function fetchConnections() {
-      try {
-        const res = await fetch('/api/connections');
-        const pairs = await res.json();
-        if (!cy) return;
-        // Agregar edges nuevos
-        for (const { a, b } of pairs) {
-          const edgeId = [a, b].sort().join('--');
-          if (!cy.$(`#${edgeId}`).length && cy.$(`#${a}`).length && cy.$(`#${b}`).length) {
-            cy.add({ data: { id: edgeId, source: a, target: b } });
-          }
-        }
-        // Eliminar edges que ya no tienen peers activos
-        cy.edges().forEach(e => {
-          const active = pairs.some(p => {
-            const key = [p.a, p.b].sort().join('--');
-            return key === e.id();
-          });
-          if (!active) cy.remove(e);
-        });
-      } catch {}
-    }
-
-    async function fetchActivity() {
-      try {
-        const res = await fetch('/api/activity?limit=40');
-        const lines = await res.json();
-        renderActivity(lines);
-      } catch {}
-    }
-
-    async function fetchPeers() {
-      try {
-        const res = await fetch('/api/stats');
-        const data = await res.json();
-        updateStats(data);
-        updateGraph(data.peers ?? []);
-        renderPeerCards(data.peers ?? []);
-        lastPeers = data.peers ?? [];
-      } catch {}
-    }
-
-    function connectSSE() {
-      const es = new EventSource('/api/stream');
-      es.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          updateStats(data);
-          updateGraph(data.peers ?? []);
-          renderPeerCards(data.peers ?? []);
-          lastPeers = data.peers ?? [];
-        } catch {}
-      };
-      es.onerror = () => { es.close(); setTimeout(connectSSE, 3000); };
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      initGraph();
-      // Esperar un tick para que el CSS aplique el height antes de que Cytoscape mida el contenedor
-      requestAnimationFrame(() => {
-        cy.resize();
-        fetchPeers();
-        fetchConnections();
-        fetchActivity();
-        connectSSE();
-      });
-      setInterval(fetchPeers, 2000);
-      setInterval(fetchConnections, 3000);
-      setInterval(fetchActivity, 2000);
+    cy.edges().forEach(e => {
+      const active = pairs.some(p => [p.a,p.b].sort().join('--') === e.id());
+      if (!active) cy.remove(e);
     });
-  </script>
+    updateMetrics(lastPeers, pairs);
+  } catch {}
+}
+
+async function fetchActivity() {
+  try {
+    const lines = await fetch('/api/activity?limit=50').then(r=>r.json());
+    allActivityLines = lines;
+    renderActivity(lines);
+    // Update recent edge times
+    lines.forEach(l => {
+      const parts = l.split('|');
+      if (parts[1]?.trim() === 'message') {
+        const m = (parts[2]??'').match(/^(peer_\w+)→(peer_\w+)/);
+        if (m) {
+          const edgeId = [m[1],m[2]].sort().join('--');
+          const ts = new Date(parts[0]).getTime();
+          if (!recentEdgeTimes[edgeId] || ts > recentEdgeTimes[edgeId]) recentEdgeTimes[edgeId] = ts;
+        }
+      }
+    });
+  } catch {}
+}
+
+async function fetchPeers() {
+  try {
+    const data = await fetch('/api/stats').then(r=>r.json());
+    updateStats(data);
+    updateGraph(data.peers ?? []);
+    renderPeerCards(data.peers ?? []);
+    lastPeers = data.peers ?? [];
+    checkNotifications(lastPeers);
+    updateMetrics(lastPeers, allConnections);
+  } catch {}
+}
+
+function connectSSE() {
+  const es = new EventSource('/api/stream');
+  es.onmessage = e => {
+    try {
+      const data = JSON.parse(e.data);
+      updateStats(data);
+      updateGraph(data.peers ?? []);
+      renderPeerCards(data.peers ?? []);
+      lastPeers = data.peers ?? [];
+    } catch {}
+  };
+  es.onerror = () => { es.close(); setTimeout(connectSSE, 3000); };
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  applyTheme();
+  applyI18n();
+  initGraph();
+  requestAnimationFrame(async () => {
+    cy.resize();
+    await fetchActivity();   // primero actividad
+    await fetchPeers();      // luego peers (para que checkNotifications tenga allActivityLines)
+    fetchConnections();
+    connectSSE();
+  });
+  setInterval(fetchPeers, 2000);
+  setInterval(fetchConnections, 3000);
+  setInterval(fetchActivity, 2000);
+});
+</script>
 </body>
 </html>

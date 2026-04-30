@@ -4,6 +4,11 @@ import { join } from "path";
 const BROKER_PORT = Number(process.env.CLAUDE_PEERS_BROKER_PORT) || 7899;
 const BROKER_URL = `http://localhost:${BROKER_PORT}`;
 
+// C3: per-peer auth token, set after successful register
+let _peerToken: string | null = null;
+export function setPeerToken(token: string): void { _peerToken = token; }
+export function getPeerToken(): string | null { return _peerToken; }
+
 export async function ensureBroker(): Promise<void> {
   // Verificar si ya está corriendo
   try {
@@ -36,9 +41,10 @@ export async function ensureBroker(): Promise<void> {
 }
 
 export async function brokerFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const authHeader = _peerToken ? { "Authorization": `Bearer ${_peerToken}` } : {};
   const res = await fetch(`${BROKER_URL}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
+    headers: { "Content-Type": "application/json", ...authHeader, ...(options?.headers ?? {}) },
   });
   if (!res.ok) {
     throw new Error(`Broker error ${res.status}: ${await res.text()}`);

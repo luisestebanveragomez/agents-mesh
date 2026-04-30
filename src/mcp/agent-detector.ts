@@ -31,8 +31,29 @@ export function detectAgent(): AgentInfo {
 
 function getParentProcessName(): string {
   try {
-    const ppid = process.ppid;
-    return execSync(`ps -o comm= -p ${ppid}`, { encoding: "utf-8" }).trim().toLowerCase();
+    // Walk up 4 levels of the process tree to find the agent
+    let pid = process.ppid;
+    for (let i = 0; i < 4; i++) {
+      const line = execSync(`ps -o comm=,ppid= -p ${pid}`, { encoding: "utf-8" }).trim();
+      const [comm, ppidStr] = line.split(/\s+/);
+      const name = (comm ?? "").toLowerCase();
+      if (name.includes("claude") || name.includes("gemini") ||
+          name.includes("opencode") || name.includes("copilot") || name.includes("codex")) {
+        return name;
+      }
+      // Also check full command line for node-based agents
+      try {
+        const cmdline = execSync(`ps -o args= -p ${pid}`, { encoding: "utf-8" }).trim().toLowerCase();
+        if (cmdline.includes("gemini")) return "gemini";
+        if (cmdline.includes("opencode")) return "opencode";
+        if (cmdline.includes("copilot")) return "copilot";
+        if (cmdline.includes("codex")) return "codex";
+      } catch {}
+      const nextPid = Number(ppidStr);
+      if (!nextPid || nextPid === pid) break;
+      pid = nextPid;
+    }
+    return execSync(`ps -o comm= -p ${process.ppid}`, { encoding: "utf-8" }).trim().toLowerCase();
   } catch {
     return "";
   }
