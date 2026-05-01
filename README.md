@@ -1,6 +1,29 @@
 # agents-mesh
 
-Multi-agent communication mesh for AI coding agents. Allows Claude Code, Gemini CLI, OpenCode, Copilot, Codex and others to communicate across terminals without the user as intermediary.
+**Let your AI agents talk to each other.**
+
+When you're running multiple AI coding agents across terminals — Claude Code on the frontend, Gemini CLI on the backend, OpenCode on the API — they have no idea each other exist. Every agent works in its own bubble. You become the middleman: copy-pasting context, relaying decisions, keeping everyone in sync.
+
+agents-mesh removes you from that loop.
+
+It creates a lightweight communication mesh between agents so they can ask each other questions, share context, and coordinate — without you having to intervene.
+
+```
+[Claude Code]  ──ask──▶  [Gemini CLI]
+               ◀──reply──
+```
+
+```
+[OpenCode]  ──notify──▶  [Claude Code]
+                          [Gemini CLI]
+                          [Codex]
+```
+
+## How it works
+
+Each agent gets an MCP server injected. When an agent joins a project, it registers itself in a local broker (SQLite + HTTP, runs on localhost). From that point on, agents can discover each other, send messages, ask questions, and wait for replies — all through standard MCP tool calls.
+
+No cloud. No accounts. Everything runs locally.
 
 ## Install
 
@@ -10,62 +33,67 @@ curl -fsSL https://raw.githubusercontent.com/luisestebanveragomez/agents-mesh/ma
 
 Supports macOS (arm64, x64) and Linux (x64, arm64). For Windows use [WSL](https://learn.microsoft.com/windows/wsl/install).
 
-### Install options
+## Add to your AI agents
 
 ```bash
-# Install to a custom directory
-AGENTS_MESH_INSTALL_DIR=~/.local/bin curl -fsSL .../install.sh | bash
-
-# Install a specific version
-AGENTS_MESH_VERSION=v0.2.0 curl -fsSL .../install.sh | bash
-```
-
-### From source
-
-```bash
-git clone git@github.com:luisestebanveragomez/agents-mesh.git
-cd agents-mesh
-bun install
-bun link   # adds agents-mesh to PATH
-```
-
-## Adding agents-mesh to an AI agent
-
-Once installed, add agents-mesh to your AI agents:
-
-```bash
-# Add to specific agents
 agents-mesh install claude-code
 agents-mesh install gemini-cli
 agents-mesh install opencode
 agents-mesh install copilot
 agents-mesh install codex
-
-# Install locally (current project only)
-agents-mesh install claude-code --local
-
-# Check status
-agents-mesh installed
-
-# Remove from a specific agent
-agents-mesh uninstall claude-code
 ```
 
-Config files modified per agent:
+That's it. Restart your agents and they're connected.
 
-| Agent | Global config | Local config |
-|-------|--------------|--------------|
-| claude-code | `~/.claude.json` | `.mcp.json` |
-| gemini-cli | `~/.gemini/settings.json` | `.gemini/settings.json` |
-| opencode | `~/.config/opencode/config.json` | `opencode.config.json` |
-| copilot | `~/Library/Application Support/Code/User/settings.json` | `.vscode/settings.json` |
-| codex | `~/.codex/config.json` | `codex.json` |
+```bash
+agents-mesh installed   # verify
+agents-mesh dashboard   # open visual dashboard
+```
 
-All commands create a timestamped `.bak` backup before modifying any file.
+## What agents can do
 
-### Other MCP-compatible agents
+Once connected, agents have access to these MCP tools:
 
-For Cursor, Windsurf, Cline/Roo, or any other agent that supports MCP servers, add this manually to its config:
+| Tool | What it does |
+|------|-------------|
+| `peers_list` | See all active agents and what they're working on |
+| `peers_ask` | Ask another agent a question and wait for the answer |
+| `peers_notify` | Broadcast a message to all agents |
+| `peers_check` | Check for incoming messages |
+| `peers_reply` | Reply to a received message |
+| `peers_search` | Find which agent has context on a topic |
+| `peers_status` | Update your current task and status |
+
+### Example
+
+Claude Code is building a UI component and needs to know the API contract:
+
+> *"Hey Gemini, what does the `/users/:id` endpoint return?"*
+
+Gemini CLI looks it up and replies. Claude Code keeps working. You never had to switch terminals.
+
+## Dashboard
+
+```bash
+agents-mesh dashboard
+```
+
+Opens a local web dashboard at `http://localhost:5723` — see all active agents, their current tasks, and the messages flowing between them in real time.
+
+## Supported agents
+
+| Agent | Install |
+|-------|---------|
+| Claude Code | `agents-mesh install claude-code` |
+| Gemini CLI | `agents-mesh install gemini-cli` |
+| OpenCode | `agents-mesh install opencode` |
+| GitHub Copilot | `agents-mesh install copilot` |
+| Codex | `agents-mesh install codex` |
+| Cursor, Windsurf, Cline, Roo... | [Manual config ↓](#other-agents) |
+
+### Other agents
+
+Any MCP-compatible agent works. Add this to its config manually:
 
 ```json
 {
@@ -77,28 +105,6 @@ For Cursor, Windsurf, Cline/Roo, or any other agent that supports MCP servers, a
   }
 }
 ```
-
-## Usage
-
-Once added to an agent, the following MCP tools are available:
-
-| Tool | Description |
-|------|-------------|
-| `peers_list` | List all active agents in the mesh |
-| `peers_ask` | Send a question to another agent and wait for the reply |
-| `peers_notify` | Broadcast a message to all agents |
-| `peers_check` | Check for incoming messages |
-| `peers_reply` | Reply to a received message |
-| `peers_search` | Find agents by role or path |
-| `peers_status` | Update this agent's current status and task |
-
-## Dashboard
-
-```bash
-agents-mesh dashboard
-```
-
-Opens a local web dashboard at `http://localhost:5723` showing all active agents, messages, and the communication graph.
 
 ## CLI reference
 
@@ -115,16 +121,34 @@ agents-mesh reply <msg_id> <response>            Reply to a message
 agents-mesh status [--task <t>] [--status <s>]  Update your status
 agents-mesh doctor                               Diagnose the setup
 agents-mesh dashboard                            Open the web dashboard
-agents-mesh mcp                                  Start the MCP server (stdio)
-agents-mesh broker                               Start the HTTP broker
+```
+
+## Install options
+
+```bash
+# Custom install directory
+AGENTS_MESH_INSTALL_DIR=~/.local/bin curl -fsSL .../install.sh | bash
+
+# Specific version
+AGENTS_MESH_VERSION=v0.2.0 curl -fsSL .../install.sh | bash
+```
+
+### From source
+
+```bash
+git clone git@github.com:luisestebanveragomez/agents-mesh.git
+cd agents-mesh
+bun install
+bun link
 ```
 
 ## Uninstall
 
 ```bash
-# Remove agents-mesh from all AI agents
-agents-mesh uninstall --all
-
-# Remove the binary
+agents-mesh uninstall --all     # remove from all AI agents
 sudo rm /usr/local/bin/agents-mesh
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
