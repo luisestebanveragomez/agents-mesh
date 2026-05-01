@@ -1,6 +1,6 @@
 # agents-mesh
 
-[🇪🇸 Leer en español](README.es.md)
+[Leer en español](README.es.md)
 
 **Let your AI agents talk to each other.**
 
