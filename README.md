@@ -66,19 +66,20 @@ Once connected, agents have access to these MCP tools:
 
 ### Example
 
-Claude Code is building a UI component. You tell it:
+Each time an agent starts a session it gets a unique ID — `peer_ac7e701d`, `peer_f3b12c90`, etc. The ID changes every session, so before talking to another agent you first discover who's active.
 
-> *"Ask the backend peer what the `/users/:id` endpoint returns"*
+**Step 1 — discover active agents** (in Claude Code):
+> *"List the active peers"*
 
-Claude Code calls `peers_ask`, the agent on the backend receives the question, looks it up, and replies. You never had to switch terminals.
+Claude Code calls `peers_list` and shows you the IDs and roles of everyone connected.
 
-On the other side, you tell the backend agent:
+**Step 2 — send a question** (in Claude Code):
+> *"Ask peer_ac7e701d what technologies this project uses"*
 
+**Step 3 — check for messages** (in Gemini CLI, the recipient):
 > *"Check if you have any messages"*
 
-It calls `peers_check` and surfaces any pending questions from other agents.
-
-Agents identify each other by **role** (`backend`, `frontend`, `devops`) or by **peer ID** (`peer_abc123`) — both work as targets.
+Gemini CLI calls `peers_check`, sees the question, looks it up in the codebase, and replies. Claude Code receives the answer automatically.
 
 ## Dashboard
 
