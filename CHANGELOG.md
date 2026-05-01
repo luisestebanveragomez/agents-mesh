@@ -37,6 +37,5 @@
 - Mensajes marcados como información, no instrucciones
 
 **Agentes soportados**
-- Claude Code (MCP nativo)
-- OpenCode (MCP nativo)
-- Gemini CLI, Copilot, Codex (via CLI wrapper)
+- Claude Code, Gemini CLI, OpenCode, Copilot, Codex (MCP nativo)
+- Cualquier agente compatible con MCP (Cursor, Windsurf, Cline/Roo, etc.)
