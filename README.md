@@ -66,11 +66,15 @@ Once connected, agents have access to these MCP tools:
 
 ### Example
 
-Claude Code is building a UI component and needs to know the API contract:
+Claude Code is building a UI component and needs to know the API contract. It calls:
 
-> *"Hey Gemini, what does the `/users/:id` endpoint return?"*
+```
+peers_ask(target: "backend", question: "what does /users/:id return?")
+```
 
-Gemini CLI looks it up and replies. Claude Code keeps working. You never had to switch terminals.
+The agent running on the backend (could be Gemini CLI, OpenCode, or any other) receives the question, looks it up, and replies. Claude Code keeps working. You never had to switch terminals.
+
+Agents identify each other by **role** (e.g. `backend`, `frontend`, `devops`) assigned when they join the mesh.
 
 ## Dashboard
 
