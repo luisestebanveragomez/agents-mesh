@@ -203,15 +203,15 @@ function statusAgent(agent: Agent): void {
 
 export async function installCommand(agent: string | undefined, opts: InstallOptions): Promise<void> {
   if (!agent) {
-    console.log(`Uso: agents-mesh install <agent> [--global | --local]
+    console.log(`Usage: agents-mesh install <agent> [--global | --local]
 
-Agents soportados: ${AGENTS.join(", ")}
+Supported agents: ${AGENTS.join(", ")}
 
-Opciones:
-  --global    Instala globalmente (default)
-  --local     Instala solo en el directorio actual
+Options:
+  --global    Install globally for all projects (default)
+  --local     Install only for the current directory
 
-Ejemplos:
+Examples:
   agents-mesh install claude-code
   agents-mesh install gemini-cli --local
   agents-mesh install copilot --global
@@ -220,49 +220,49 @@ Ejemplos:
   }
 
   if (!AGENTS.includes(agent as Agent)) {
-    console.error(`Agent no soportado: ${agent}`);
-    console.error(`Soportados: ${AGENTS.join(", ")}`);
-    console.error(`Para otros agentes, consulta el README.`);
+    console.error(`Unsupported agent: ${agent}`);
+    console.error(`Supported: ${AGENTS.join(", ")}`);
+    console.error(`For other agents, see the README.`);
     process.exit(1);
   }
 
   const scope: Scope = opts.local ? "local" : "global";
-  console.log(`Instalando agents-mesh para ${agent} (${scope})...`);
+  console.log(`Installing agents-mesh for ${agent} (${scope})...`);
   installAgent(agent as Agent, scope);
-  console.log(`\n✓ agents-mesh instalado. Reinicia ${agent} para activarlo.`);
+  console.log(`\n✓ agents-mesh installed. Restart ${agent} to activate.`);
 }
 
 export async function uninstallCommand(agent: string | undefined, opts: InstallOptions): Promise<void> {
   if (opts.all || agent === "--all") {
     const records = loadTracking();
     if (records.length === 0) {
-      console.log("No hay instalaciones registradas.");
+      console.log("No installations recorded.");
       return;
     }
-    console.log(`Desinstalando agents-mesh de ${records.length} configuración(es)...`);
+    console.log(`Removing agents-mesh from ${records.length} installation(s)...`);
     for (const r of records) {
       if (AGENTS.includes(r.agent as Agent)) {
         uninstallAgent(r.agent as Agent, r.scope);
       }
     }
     saveTracking([]);
-    console.log("\n✓ agents-mesh removido de todos los agentes.");
+    console.log("\n✓ agents-mesh removed from all agents.");
     return;
   }
 
   if (!agent) {
-    console.log(`Uso: agents-mesh uninstall <agent> [--global | --local]
-      agents-mesh uninstall --all\n`);
+    console.log(`Usage: agents-mesh uninstall <agent> [--global | --local]
+       agents-mesh uninstall --all\n`);
     return;
   }
 
   if (!AGENTS.includes(agent as Agent)) {
-    console.error(`Agent no soportado: ${agent}`);
+    console.error(`Unsupported agent: ${agent}`);
     process.exit(1);
   }
 
   const scope: Scope = opts.local ? "local" : "global";
-  console.log(`Desinstalando agents-mesh de ${agent} (${scope})...`);
+  console.log(`Removing agents-mesh from ${agent} (${scope})...`);
   uninstallAgent(agent as Agent, scope);
 }
 

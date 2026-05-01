@@ -142,6 +142,7 @@ agents-mesh notify <message>                      Notify all peers
 agents-mesh check                                 Check pending messages
 agents-mesh reply <msg_id> <response>             Reply to a message
 agents-mesh status [--task <t>] [--status <s>]   Update your status
+agents-mesh register [--role <r>] [--agent <n>]  Register manually (without MCP)
 agents-mesh doctor                                Diagnose the setup
 agents-mesh dashboard                             Open the web dashboard
 ```

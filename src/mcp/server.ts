@@ -33,18 +33,18 @@ export async function main() {
     return { tools: [
       {
         name: "peers_list",
-        description: "Lista todas las instancias de agentes IA activos en el sistema",
+        description: "List all active AI agent instances in the mesh",
         inputSchema: {
           type: "object",
           properties: {
             filter: {
               type: "object",
-              description: "Filtros opcionales",
+              description: "Optional filters",
               properties: {
-                role:          { type: "string", description: "Filtrar por role (ej: backend, frontend)" },
-                agent:         { type: "string", description: "Filtrar por tipo de agente (ej: claude-code)" },
-                active_within: { type: "number", description: "Solo peers activos en los últimos N segundos" },
-                exclude_self:  { type: "boolean", description: "Excluir este peer de los resultados" },
+                role:          { type: "string", description: "Filter by role (e.g. backend, frontend)" },
+                agent:         { type: "string", description: "Filter by agent type (e.g. claude-code)" },
+                active_within: { type: "number", description: "Only peers active in the last N seconds" },
+                exclude_self:  { type: "boolean", description: "Exclude this peer from results" },
               },
             },
           },
@@ -52,65 +52,65 @@ export async function main() {
       },
       {
         name: "peers_status",
-        description: "Actualiza el estado del peer actual (visible en el dashboard y para otros peers)",
+        description: "Update the current peer's status (visible in the dashboard and to other peers)",
         inputSchema: {
           type: "object",
           properties: {
-            role:         { type: "string", description: "Nuevo role para este peer" },
-            current_task: { type: "string", description: "Descripción de la tarea actual" },
-            status:       { type: "string", enum: ["working", "idle", "waiting"], description: "Estado actual" },
+            role:         { type: "string", description: "New role for this peer" },
+            current_task: { type: "string", description: "Description of the current task" },
+            status:       { type: "string", enum: ["working", "idle", "waiting"], description: "Current status" },
           },
         },
       },
       {
         name: "peers_ask",
-        description: "Hace una pregunta a otro peer y espera respuesta. Acepta ID directo o role como target.",
+        description: "Ask another peer a question and wait for the reply. Accepts peer ID or role as target.",
         inputSchema: {
           type: "object",
           required: ["target", "question"],
           properties: {
-            target:            { type: "string", description: "ID del peer o su role (ej: 'backend', 'peer_abc123')" },
-            question:          { type: "string", description: "La pregunta a hacer" },
-            search_if_unknown: { type: "boolean", description: "¿Debe investigar si no lo sabe?" },
-            search_scope:      { type: "string", description: "Ruta donde buscar (ej: src/auth/)" },
-            timeout_seconds:   { type: "number", description: "Timeout en segundos (default: 30)" },
+            target:            { type: "string", description: "Peer ID or role (e.g. 'backend', 'peer_abc123')" },
+            question:          { type: "string", description: "The question to ask" },
+            search_if_unknown: { type: "boolean", description: "Should the peer investigate if it doesn't know?" },
+            search_scope:      { type: "string", description: "Path to search in (e.g. src/auth/)" },
+            timeout_seconds:   { type: "number", description: "Timeout in seconds (default: 30)" },
           },
         },
       },
       {
         name: "peers_reply",
-        description: "Responde a un mensaje recibido de otro peer",
+        description: "Reply to a message received from another peer",
         inputSchema: {
           type: "object",
           required: ["message_id", "content"],
           properties: {
-            message_id: { type: "string", description: "ID del mensaje a responder" },
-            content:    { type: "string", description: "El contenido de la respuesta" },
+            message_id: { type: "string", description: "ID of the message to reply to" },
+            content:    { type: "string", description: "The reply content" },
           },
         },
       },
       {
         name: "peers_notify",
-        description: "Envía una notificación a uno o varios peers sin esperar respuesta",
+        description: "Send a notification to one or more peers without waiting for a reply",
         inputSchema: {
           type: "object",
           required: ["target", "message"],
           properties: {
-            target:   { type: "string", description: "ID del peer, role, array de ids/roles, o 'all'" },
-            message:  { type: "string", description: "El mensaje a enviar" },
-            category: { type: "string", enum: ["info", "warning", "change"], description: "Categoría del mensaje" },
+            target:   { type: "string", description: "Peer ID, role, array of ids/roles, or 'all'" },
+            message:  { type: "string", description: "The message to send" },
+            category: { type: "string", enum: ["info", "warning", "change"], description: "Message category" },
           },
         },
       },
       {
         name: "peers_search",
-        description: "Pregunta a todos los peers quién tiene contexto sobre un tema",
+        description: "Ask all peers who has context on a given topic",
         inputSchema: {
           type: "object",
           required: ["topic"],
           properties: {
-            topic:           { type: "string", description: "El tema sobre el que buscar" },
-            timeout_seconds: { type: "number", description: "Timeout en segundos (default: 30)" },
+            topic:           { type: "string", description: "The topic to search for" },
+            timeout_seconds: { type: "number", description: "Timeout in seconds (default: 30)" },
           },
         },
       },

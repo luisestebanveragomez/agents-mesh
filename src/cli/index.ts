@@ -7,7 +7,6 @@ import { notifyCommand } from "./commands/notify";
 import { checkCommand } from "./commands/check";
 import { statusCommand } from "./commands/status";
 import { doctorCommand } from "./commands/doctor";
-import { register } from "./register";
 
 const [,, command, ...rest] = process.argv;
 
@@ -21,7 +20,7 @@ async function main() {
     case "ask": {
       const [target, ...questionParts] = rest;
       if (!target || questionParts.length === 0) {
-        console.error("Uso: agents-mesh ask <target> <pregunta>");
+        console.error("Usage: agents-mesh ask <target> <question>");
         process.exit(1);
       }
       await askCommand(target, questionParts.join(" "));
@@ -31,7 +30,7 @@ async function main() {
     case "reply": {
       const [msgId, ...contentParts] = rest;
       if (!msgId || contentParts.length === 0) {
-        console.error("Uso: agents-mesh reply <msg_id> <respuesta>");
+        console.error("Usage: agents-mesh reply <msg_id> <response>");
         process.exit(1);
       }
       await replyCommand(msgId, contentParts.join(" "));
@@ -40,7 +39,7 @@ async function main() {
 
     case "notify": {
       if (rest.length === 0) {
-        console.error("Uso: agents-mesh notify <mensaje>");
+        console.error("Usage: agents-mesh notify <message>");
         process.exit(1);
       }
       await notifyCommand(rest.join(" "));
@@ -53,7 +52,6 @@ async function main() {
     }
 
     case "status": {
-      // agents-mesh status --task "trabajando en X" --status working
       const opts: Record<string, string> = {};
       for (let i = 0; i < rest.length; i++) {
         if (rest[i] === "--task" && rest[i + 1]) opts.task = rest[++i];
@@ -66,18 +64,6 @@ async function main() {
 
     case "doctor": {
       await doctorCommand();
-      break;
-    }
-
-    case "register": {
-      // agents-mesh register [--agent gemini-cli] [--role backend] [--detach]
-      const opts: Record<string, string | boolean> = {};
-      for (let i = 0; i < rest.length; i++) {
-        if (rest[i] === "--agent" && rest[i + 1]) opts.agent = rest[++i];
-        else if (rest[i] === "--role" && rest[i + 1]) opts.role = rest[++i];
-        else if (rest[i] === "--detach") opts.detach = true;
-      }
-      await register(opts as any);
       break;
     }
 
@@ -124,26 +110,25 @@ async function main() {
     default: {
       console.log(`agents-mesh v0.1.0
 
-Uso: agents-mesh <comando> [opciones]
+Usage: agents-mesh <command> [options]
 
-Comandos:
-  list                              Lista peers activos
-  ask <target> <pregunta>           Pregunta a un peer
-  reply <msg_id> <respuesta>        Responde un mensaje
-  notify <mensaje>                  Notifica a todos los peers
-  check                             Revisa mensajes pendientes
-  register [--agent <n>] [--role <r>] [--detach]  Registra este agente
-  status [--task <t>] [--status <s>]  Actualiza estado
-  doctor                            Diagnóstico del sistema
-  dashboard                         Abre el dashboard
-  install <agent> [--global|--local]  Instala en un agente
-  uninstall <agent> [--global|--local] Desinstala de un agente
-  uninstall --all                     Desinstala de todos los agentes
-  installed [agent]                   Muestra estado de instalación
-  mcp                                 Inicia el MCP server (stdio)
-  broker                              Inicia el broker HTTP
+Commands:
+  list                               List active peers
+  ask <target> <question>            Ask another peer a question
+  reply <msg_id> <response>          Reply to a message
+  notify <message>                   Notify all peers
+  check                              Check pending messages
+  status [--task <t>] [--status <s>] Update your status
+  doctor                             Diagnose the setup
+  dashboard                          Open the web dashboard
+  install <agent> [--global|--local] Add to an AI agent
+  uninstall <agent> [--global|--local] Remove from an AI agent
+  uninstall --all                    Remove from all agents
+  installed [agent]                  Show installation status
+  mcp                                Start the MCP server (stdio)
+  broker                             Start the HTTP broker
 
-Agents:  claude-code, gemini-cli, opencode, copilot, codex
+Agents: claude-code, gemini-cli, opencode, copilot, codex
 `);
     }
   }

@@ -4,40 +4,39 @@ import { BrokerPeer } from "../../broker/types";
 import { BROKER_PORT } from "../../shared/constants";
 
 export async function doctorCommand(): Promise<void> {
-  console.log(`\nClaude Peers Doctor v0.1.0`);
+  console.log(`\nagents-mesh doctor v0.1.0`);
   console.log("─".repeat(30));
 
-  // 1. Broker corriendo
+  // 1. Broker running
   let brokerOk = false;
   try {
     await ensureBroker();
     brokerOk = true;
   } catch {}
-  console.log(`Broker HTTP:        ${brokerOk ? `✅ (localhost:${BROKER_PORT})` : "❌ no responde"}`);
+  console.log(`Broker HTTP:        ${brokerOk ? `✅ (localhost:${BROKER_PORT})` : "❌ not responding"}`);
 
-  // 2. Peers activos
+  // 2. Active peers
   let peers: BrokerPeer[] = [];
   if (brokerOk) {
     try { peers = await brokerFetch<BrokerPeer[]>("/peers"); } catch {}
   }
-  console.log(`Peers activos:      ${peers.length}`);
+  console.log(`Active peers:       ${peers.length}`);
 
-  // 3. MCP registrado
+  // 3. MCP registered
   let mcpOk = false;
   try {
     const output = execSync("claude mcp list 2>/dev/null", { encoding: "utf-8" });
     mcpOk = output.includes("agents-mesh");
   } catch {}
-  console.log(`MCP registrado:     ${mcpOk ? "✅" : "❌"}`);
+  console.log(`MCP registered:     ${mcpOk ? "✅" : "❌"}`);
 
-  // 4. Bun disponible
-  let bunVersion = "";
-  let bunOk = false;
+  // 4. Binary in PATH
+  let binaryOk = false;
   try {
-    bunVersion = execSync("bun --version", { encoding: "utf-8" }).trim();
-    bunOk = true;
+    execSync("which agents-mesh", { encoding: "utf-8" });
+    binaryOk = true;
   } catch {}
-  console.log(`Bun disponible:     ${bunOk ? `✅ v${bunVersion}` : "❌"}`);
+  console.log(`agents-mesh in PATH: ${binaryOk ? "✅" : "❌"}`);
 
   // 5. Claude Code
   let claudeOk = false;
@@ -46,8 +45,8 @@ export async function doctorCommand(): Promise<void> {
     claudeVersion = execSync("claude --version 2>/dev/null", { encoding: "utf-8" }).trim();
     claudeOk = true;
   } catch {}
-  console.log(`Claude Code:        ${claudeOk ? `✅ ${claudeVersion}` : "❌"}`);
+  console.log(`Claude Code:        ${claudeOk ? `✅ ${claudeVersion}` : "❌ not found"}`);
 
   console.log("─".repeat(30));
-  console.log(brokerOk && bunOk ? "✅ Todo en orden\n" : "⚠️  Hay problemas\n");
+  console.log(brokerOk ? "✅ All good\n" : "⚠️  Issues detected\n");
 }

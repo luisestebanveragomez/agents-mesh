@@ -8,14 +8,14 @@ export async function askCommand(target: string, question: string, timeoutSec = 
   await ensureBroker();
   const self = await getSessionPeer();
   if (!self) {
-    console.error("❌ No estás registrado. Ejecuta: agents-mesh register");
+    console.error("❌ Not registered. Run: agents-mesh register");
     process.exit(1);
   }
 
   const peers = await brokerFetch<BrokerPeer[]>("/peers");
   const targetPeer = peers.find(p => p.id === target || p.role === target);
   if (!targetPeer) {
-    console.error(`❌ Peer no encontrado: ${target}`);
+    console.error(`❌ Peer not found: ${target}`);
     process.exit(1);
   }
 
@@ -29,8 +29,8 @@ export async function askCommand(target: string, question: string, timeoutSec = 
     } as BrokerMessage),
   });
 
-  console.log(`💬 Pregunta enviada a ${targetPeer.role} (${targetPeer.id})`);
-  console.log(`⏳ Esperando respuesta (timeout: ${timeoutSec}s)...`);
+  console.log(`💬 Question sent to ${targetPeer.role} (${targetPeer.id})`);
+  console.log(`⏳ Waiting for reply (timeout: ${timeoutSec}s)...`);
 
   const deadline = Date.now() + timeoutSec * 1000;
   while (Date.now() < deadline) {
@@ -39,11 +39,11 @@ export async function askCommand(target: string, question: string, timeoutSec = 
       `/message/response/${self.id}/${msgId}`
     );
     if (result.found && result.content) {
-      console.log(`\n✅ Respuesta de ${targetPeer.role}:\n${result.content}`);
+      console.log(`\n✅ Reply from ${targetPeer.role}:\n${result.content}`);
       return;
     }
   }
-  console.log(`⏰ Timeout — sin respuesta de ${targetPeer.role}`);
+  console.log(`⏰ Timeout — no reply from ${targetPeer.role}`);
 }
 
 function sleep(ms: number): Promise<void> {
