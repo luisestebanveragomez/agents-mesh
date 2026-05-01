@@ -1,6 +1,6 @@
 # agents-mesh
 
-[Read in English](README.md)
+[Read in English](README.md) · [中文](README.zh.md)
 
 **Haz que tus agentes de IA se hablen entre sí.**
 
