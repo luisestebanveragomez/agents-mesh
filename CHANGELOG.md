@@ -13,7 +13,7 @@
 - `peers_search` — descubre qué peer sabe sobre un tema
 - `peers_check` — revisa mensajes pendientes
 
-**CLI Wrapper**
+**CLI**
 - `agents-mesh list` — lista peers
 - `agents-mesh ask <target> <msg>` — pregunta
 - `agents-mesh reply <id> <msg>` — responde
@@ -23,6 +23,8 @@
 - `agents-mesh status` — actualiza estado
 - `agents-mesh doctor` — diagnóstico
 - `agents-mesh dashboard` — dashboard web
+- `agents-mesh install <agent>` — instala en un agente
+- `agents-mesh uninstall [--all]` — desinstala
 
 **Dashboard**
 - Grafo de peers en tiempo real (Cytoscape.js)
