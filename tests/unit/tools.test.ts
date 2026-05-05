@@ -28,10 +28,13 @@ const brokerPeers: BrokerPeer[] = [];
 
 mock.module("../../src/broker/launcher", () => ({
   ensureBroker: async () => {},
+  setPeerToken: (_token: string) => {},
+  getPeerToken: () => null,
   brokerFetch: async (path: string, _options?: RequestInit) => {
     if (path === "/peers") return brokerPeers;
-    if (path.startsWith("/peer/register")) return {};
+    if (path.startsWith("/peer/register")) return { ok: true, token: "test-token" };
     if (path.startsWith("/peer/status")) return {};
+    if (path.startsWith("/peer/heartbeat")) return {};
     if (path.startsWith("/message/send")) return {};
     return {};
   },

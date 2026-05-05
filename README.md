@@ -2,6 +2,8 @@
 
 [Leer en español](README.es.md) · [中文](README.zh.md)
 
+> **Early beta** — core features work, APIs may change before v1.0.
+
 **Let your AI agents talk to each other.**
 
 When you're running multiple AI coding agents — Claude Code on the frontend, Gemini CLI on the backend, OpenCode on the API — they have no idea each other exist. Every agent works in its own bubble. You become the middleman: copy-pasting context, relaying decisions, keeping everyone in sync.

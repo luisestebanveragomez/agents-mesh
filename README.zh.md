@@ -2,6 +2,8 @@
 
 [Read in English](README.md) · [Leer en español](README.es.md)
 
+> **早期测试版** — 核心功能可用，v1.0 发布前 API 可能有所变动。
+
 **让你的 AI 智能体互相对话。**
 
 当你在不同终端运行多个 AI 编程智能体时 —— Claude Code 负责前端，Gemini CLI 负责后端，OpenCode 负责 API —— 它们彼此毫不知情。每个智能体都在自己的孤岛中工作。你成了中间人：复制粘贴上下文、传递决策、维持同步。

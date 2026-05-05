@@ -2,6 +2,8 @@
 
 [Read in English](README.md) · [中文](README.zh.md)
 
+> **Beta temprana** — las funciones principales funcionan, las APIs pueden cambiar antes de v1.0.
+
 **Haz que tus agentes de IA se hablen entre sí.**
 
 Cuando tienes varios agentes de IA corriendo en distintas terminales — Claude Code en el frontend, Gemini CLI en el backend, OpenCode en la API — ninguno sabe que los demás existen. Cada agente trabaja en su propia burbuja. Tú terminas siendo el intermediario: copiando contexto, transmitiendo decisiones, manteniéndolos sincronizados.
