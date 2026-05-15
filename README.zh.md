@@ -9,9 +9,14 @@
 
 **为 AI 编程智能体提供轻量级通信网格。**
 
-当你在不同终端运行多个 AI 编程智能体时 —— Claude Code 负责前端，Gemini CLI 负责后端，OpenCode 负责 API —— 它们彼此毫不知情。每个智能体都在自己的孤岛中工作。你成了中间人：复制粘贴上下文、传递决策、维持同步。
+当你在不同终端运行多个 AI 编程智能体时 —— Claude Code 负责前端，Gemini CLI 负责后端，OpenCode 负责 API —— 它们彼此毫不知情。每个智能体都在自己的孤岛中工作。
 
-agents-mesh 让你从这个循环中解脱出来。它为每个智能体提供一套 MCP 工具，让它们能够互相发现、提问、共享上下文 —— 全部通过自然语言，全部在本地运行。
+**没有 agents-mesh 时**，你就是中间人：
+- Claude 询问认证库 → 你切换到 Gemini，问完再把答案复制回去
+- Gemini 修改了某个模型 → 你手动通知 Claude 和 OpenCode
+- 每一个决策都要经过你
+
+**有了 agents-mesh**，智能体通过本地网格直接通信。你不再是路由器。
 
 <!-- GIF: 两个终端 + 仪表板实时显示智能体通信 -->
 
@@ -19,9 +24,17 @@ agents-mesh 让你从这个循环中解脱出来。它为每个智能体提供�
 
 ## 工作原理
 
-当智能体配置了 agents-mesh 并启动时，它会连接到本地 broker（`localhost:7899`）并注册一个唯一的会话 ID（例如 `peer_ac7e701d`）。broker 是一个轻量级 HTTP 服务器，由 agents-mesh 自动启动 —— 你无需手动管理它。
+**01 — 注册。** 智能体配置了 agents-mesh 并启动后，会连接到本地 broker（`localhost:7899`）并获得一个唯一 ID，例如 `peer_ac7e701d`。broker 由 agents-mesh 自动启动 —— 你无需手动管理。每个智能体定期发送心跳包，让 broker 知道谁仍然活跃。
 
-每个智能体定期发送心跳包，让 broker 知道谁仍然活跃。当 Claude Code 调用 `peers_ask` 并指定目标 `peer_f3b12c90` 时，broker 会暂存该消息，直到 Gemini CLI 通过 `peers_check` 获取它，然后将回复路由回去。消息是临时的 —— 它们存在于内存中，broker 重启后即消失。
+**02 — 发现。** 任何智能体都可以调用 `peers_list` 查看所有活跃 peer：它们的 ID、智能体类型和当前任务。这就是 Claude 知道 Gemini 存在的方式。
+
+**03 — 提问。** Claude 调用 `peers_ask(target="peer_f3b12c90", question="...")`。broker 暂存消息，直到目标智能体来轮询。
+
+**04 — 回复。** Gemini 调用 `peers_check` 看到消息，查找答案后调用 `peers_reply`。broker 将回复路由回 Claude 等待中的 `peers_ask` 调用。
+
+**05 — 广播。** 任何智能体都可以调用 `peers_notify` 向所有人广播 —— 无需回复。适合通告重要变更（"我刚修改了 User 模型 —— email 字段现在可以为空"）。
+
+消息是临时的 —— 它们存在于内存中，broker 重启后即消失。
 
 ```mermaid
 graph TD
@@ -294,6 +307,10 @@ rm ~/.local/bin/agents-mesh
 **智能体断开连接后会怎样？**
 
 broker 检测到心跳缺失后会将该 peer 标记为不活跃。发给该 peer 的待处理消息会保留在 broker 队列中直到过期。其他智能体在 `peers_list` 中将不再看到已断开的 peer。
+
+**消息存储在哪里？**
+
+仅存储在内存中。消息是临时的 —— broker 重启后即消失。没有持久化存储，没有数据库，没有云同步。
 
 **不同机器上的两个智能体能通信吗？**
 

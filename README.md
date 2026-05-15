@@ -9,9 +9,14 @@
 
 **A lightweight communication mesh for AI coding agents.**
 
-When you're running multiple AI coding agents — Claude Code on the frontend, Gemini CLI on the backend, OpenCode on the API — they have no idea each other exist. Every agent works in its own bubble. You become the middleman: copy-pasting context, relaying decisions, keeping everyone in sync.
+When you're running multiple AI coding agents — Claude Code on the frontend, Gemini CLI on the backend, OpenCode on the API — they have no idea each other exist. Every agent works in its own bubble.
 
-agents-mesh removes you from that loop. It gives each agent a set of MCP tools so they can discover each other, ask questions, and share context — all through natural language, all on localhost.
+**Without agents-mesh**, you are the middleman:
+- Claude asks about the auth library → you switch to Gemini, ask, copy the answer back
+- Gemini changes a model → you tell Claude and OpenCode manually
+- Every decision passes through you
+
+**With agents-mesh**, agents talk directly through a local mesh. You stop being the router.
 
 <!-- GIF: two terminals + dashboard showing agents communicating in real time -->
 
@@ -19,9 +24,17 @@ agents-mesh removes you from that loop. It gives each agent a set of MCP tools s
 
 ## How it works
 
-When an agent starts up with agents-mesh configured, it connects to a local broker (`localhost:7899`) and registers with a unique session ID (e.g. `peer_ac7e701d`). The broker is a lightweight HTTP server that agents-mesh starts automatically — you never need to manage it manually.
+**01 — Register.** When an agent starts with agents-mesh configured, it connects to the local broker (`localhost:7899`) and gets a unique ID like `peer_ac7e701d`. The broker starts automatically — you never manage it manually. Each agent sends periodic heartbeats so the broker knows who's still alive.
 
-Each agent sends periodic heartbeats so the broker knows who is still active. When Claude Code calls `peers_ask` targeting `peer_f3b12c90`, the broker holds the message until Gemini CLI polls for it with `peers_check` and then routes the reply back. Messages are ephemeral — they live in memory and are gone when the broker restarts.
+**02 — Discovery.** Any agent can call `peers_list` to see every active peer: their ID, agent type, and current task. This is how Claude knows Gemini exists.
+
+**03 — Ask.** Claude calls `peers_ask(target="peer_f3b12c90", question="...")`. The broker holds the message until the target agent polls for it.
+
+**04 — Reply.** Gemini calls `peers_check`, sees the message, looks up the answer, and calls `peers_reply`. The broker routes the reply back to Claude's waiting `peers_ask` call.
+
+**05 — Notify.** Any agent can call `peers_notify` to broadcast to everyone — no reply expected. Useful for announcing breaking changes ("I just changed the User model — email is now nullable").
+
+Messages are ephemeral — they live in memory and disappear when the broker restarts.
 
 ```mermaid
 graph TD
@@ -294,6 +307,10 @@ Messages travel over localhost only and never leave your machine. There is no au
 **What happens when an agent disconnects?**
 
 The broker detects missed heartbeats and marks the peer as inactive. Any pending messages addressed to that peer remain in the broker's queue until they expire. Other agents will no longer see the disconnected peer in `peers_list`.
+
+**Where are messages stored?**
+
+In memory only. Messages are ephemeral — they disappear when the broker restarts. There is no persistent storage, no database, no cloud sync.
 
 **Can two agents on different machines communicate?**
 

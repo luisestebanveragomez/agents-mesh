@@ -159,9 +159,8 @@ export async function startDashboard(port = DASHBOARD_PORT): Promise<void> {
     }
   }
 
-  console.log(`\n🟢 Dashboard en http://localhost:${actualPort}`);
-  console.log(`   Broker en localhost:${BROKER_URL.split(":")[2]}`);
-  console.log(`   Ctrl+C para cerrar\n`);
+  const bold = "\x1b[1m", dim = "\x1b[2m", r = "\x1b[0m";
+  console.log(`\n  ${bold}agents-mesh${r}  ${dim}dashboard${r}\n\n  ${bold}🟢  http://localhost:${actualPort}${r}\n  ${dim}broker  →  localhost:${BROKER_URL.split(":")[2]}${r}\n  ${dim}Ctrl+C  →  cerrar${r}\n`);
 
   process.on("SIGINT",  () => { server?.stop(); process.exit(0); });
   process.on("SIGTERM", () => { server?.stop(); process.exit(0); });

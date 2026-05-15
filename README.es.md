@@ -9,9 +9,14 @@
 
 **Una malla de comunicación ligera para agentes de IA.**
 
-Cuando tienes varios agentes de IA corriendo en distintas terminales — Claude Code en el frontend, Gemini CLI en el backend, OpenCode en la API — ninguno sabe que los demás existen. Cada agente trabaja en su propia burbuja. Tú terminas siendo el intermediario: copiando contexto, transmitiendo decisiones, manteniéndolos sincronizados.
+Cuando tienes varios agentes de IA corriendo en distintas terminales — Claude Code en el frontend, Gemini CLI en el backend, OpenCode en la API — ninguno sabe que los demás existen. Cada agente trabaja en su propia burbuja.
 
-agents-mesh te saca de ese loop. Le da a cada agente un conjunto de herramientas MCP para que puedan descubrirse, hacerse preguntas y compartir contexto — todo en lenguaje natural, todo en localhost.
+**Sin agents-mesh**, tú eres el intermediario:
+- Claude pregunta por la librería de autenticación → cambias a Gemini, preguntas, copias la respuesta de vuelta
+- Gemini cambia un modelo → les avisas manualmente a Claude y a OpenCode
+- Cada decisión pasa por ti
+
+**Con agents-mesh**, los agentes se comunican directamente a través de una malla local. Dejas de ser el router.
 
 <!-- GIF: dos terminales + dashboard mostrando agentes comunicándose en tiempo real -->
 
@@ -19,9 +24,17 @@ agents-mesh te saca de ese loop. Le da a cada agente un conjunto de herramientas
 
 ## Cómo funciona
 
-Cuando un agente arranca con agents-mesh configurado, se conecta a un broker local (`localhost:7899`) y se registra con un ID de sesión único (ej. `peer_ac7e701d`). El broker es un servidor HTTP ligero que agents-mesh inicia automáticamente — nunca necesitas gestionarlo manualmente.
+**01 — Registro.** Cuando un agente arranca con agents-mesh configurado, se conecta al broker local (`localhost:7899`) y obtiene un ID único como `peer_ac7e701d`. El broker se inicia automáticamente — nunca necesitas gestionarlo manualmente. Cada agente envía heartbeats periódicos para que el broker sepa quién sigue activo.
 
-Cada agente envía heartbeats periódicos para que el broker sepa quién sigue activo. Cuando Claude Code llama a `peers_ask` apuntando a `peer_f3b12c90`, el broker retiene el mensaje hasta que Gemini CLI lo consulta con `peers_check` y luego enruta la respuesta de vuelta. Los mensajes son efímeros — viven en memoria y desaparecen cuando el broker se reinicia.
+**02 — Descubrimiento.** Cualquier agente puede llamar a `peers_list` para ver todos los peers activos: su ID, tipo de agente y tarea actual. Así es como Claude sabe que Gemini existe.
+
+**03 — Preguntar.** Claude llama a `peers_ask(target="peer_f3b12c90", question="...")`. El broker retiene el mensaje hasta que el agente destinatario lo consulte.
+
+**04 — Responder.** Gemini llama a `peers_check`, ve el mensaje, busca la respuesta y llama a `peers_reply`. El broker enruta la respuesta de vuelta a la llamada `peers_ask` de Claude.
+
+**05 — Notificar.** Cualquier agente puede llamar a `peers_notify` para hacer broadcast a todos — sin esperar respuesta. Útil para anunciar cambios importantes ("Cambié el modelo User — el campo email ahora puede ser nulo").
+
+Los mensajes son efímeros — viven en memoria y desaparecen cuando el broker se reinicia.
 
 ```mermaid
 graph TD
@@ -294,6 +307,10 @@ Los mensajes viajan únicamente por localhost y nunca salen de tu máquina. No h
 **¿Qué pasa cuando un agente se desconecta?**
 
 El broker detecta los heartbeats perdidos y marca el peer como inactivo. Los mensajes pendientes dirigidos a ese peer permanecen en la cola del broker hasta que expiran. Los demás agentes ya no verán al peer desconectado en `peers_list`.
+
+**¿Dónde se almacenan los mensajes?**
+
+Solo en memoria. Los mensajes son efímeros — desaparecen cuando el broker se reinicia. No hay almacenamiento persistente, ni base de datos, ni sincronización en la nube.
 
 **¿Pueden comunicarse dos agentes en máquinas diferentes?**
 
