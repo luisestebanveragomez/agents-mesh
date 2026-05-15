@@ -51,12 +51,16 @@ get_latest_version() {
   echo "$version"
 }
 
+TMPDIR_CLEANUP=""
+cleanup() { [ -n "$TMPDIR_CLEANUP" ] && rm -rf "$TMPDIR_CLEANUP"; }
+trap cleanup EXIT
+
 main() {
   echo ""
   info "Installing agents-mesh..."
   echo ""
 
-  local platform version tarball url tmpdir="" bin_file needs_sudo
+  local platform version tarball url bin_file needs_sudo
 
   platform="$(detect_platform)"
   version="${AGENTS_MESH_VERSION:-$(get_latest_version)}"
@@ -70,17 +74,16 @@ main() {
 
   command -v curl >/dev/null 2>&1 || error "curl is required but not installed"
 
-  tmpdir="$(mktemp -d)"
-  trap '[ -n "$tmpdir" ] && rm -rf "$tmpdir"' EXIT
+  TMPDIR_CLEANUP="$(mktemp -d)"
 
   info "Downloading ${tarball}..."
-  if ! curl -fsSL --progress-bar "$url" -o "${tmpdir}/${tarball}"; then
+  if ! curl -fsSL --progress-bar "$url" -o "${TMPDIR_CLEANUP}/${tarball}"; then
     error "Download failed.\nCheck that ${version} exists at https://github.com/${REPO}/releases"
   fi
 
-  tar -xzf "${tmpdir}/${tarball}" -C "$tmpdir"
+  tar -xzf "${TMPDIR_CLEANUP}/${tarball}" -C "$TMPDIR_CLEANUP"
 
-  bin_file="$(find "$tmpdir" -maxdepth 1 -type f -name "${BINARY}*" ! -name "*.tar.gz" | head -1)"
+  bin_file="$(find "$TMPDIR_CLEANUP" -maxdepth 1 -type f -name "${BINARY}*" ! -name "*.tar.gz" | head -1)"
   [ -n "$bin_file" ] || error "Binary not found in archive"
 
   needs_sudo=""
