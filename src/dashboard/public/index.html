@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Agent Mesh</title>
+  <link rel="icon" type="image/svg+xml" href="/logo.svg">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.29.2/cytoscape.min.js"></script>
   <style>
@@ -128,7 +129,17 @@
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
     <div>
-      <h1 style="color:#60a5fa;letter-spacing:0.2em;font-size:1.1rem;font-weight:bold;margin:0">AGENT-MESH</h1>
+      <div style="display:flex;align-items:center;gap:8px">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:22px;height:22px;color:#60a5fa;flex-shrink:0">
+          <circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"></circle>
+          <circle cx="4" cy="5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.2"></circle>
+          <circle cx="20" cy="5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.2"></circle>
+          <circle cx="4" cy="19" r="1.6" fill="none" stroke="currentColor" stroke-width="1.2"></circle>
+          <circle cx="20" cy="19" r="1.6" fill="none" stroke="currentColor" stroke-width="1.2"></circle>
+          <path d="M5.2 6.2 L10.5 10.5 M18.8 6.2 L13.5 10.5 M5.2 17.8 L10.5 13.5 M18.8 17.8 L13.5 13.5" stroke="currentColor" stroke-width="1.1"></path>
+        </svg>
+        <h1 style="color:#60a5fa;letter-spacing:0.2em;font-size:1.1rem;font-weight:bold;margin:0">AGENT-MESH</h1>
+      </div>
       <div style="font-size:10px;color:var(--text-muted);margin-top:2px"><span id="last-update"></span></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">

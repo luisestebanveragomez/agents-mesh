@@ -87,6 +87,19 @@ async function handler(req: Request): Promise<Response> {
     return new Response(DASHBOARD_HTML, { headers: { ...headers, "Content-Type": "text/html" } });
   }
 
+  if (path === "/logo.svg") {
+    try {
+      const { LOGO_SVG } = await import("./embedded-icons");
+      return new Response(LOGO_SVG, { headers: { ...headers, "Content-Type": "image/svg+xml" } });
+    } catch {}
+    try {
+      const content = await readFile(join(PUBLIC_DIR, "logo.svg"), "utf-8");
+      return new Response(content, { headers: { ...headers, "Content-Type": "image/svg+xml" } });
+    } catch {
+      return new Response("", { status: 404 });
+    }
+  }
+
   if (path.startsWith("/icons/")) {
     const filename = path.slice("/icons/".length);
     // Try embedded icons first (compiled binary)
