@@ -143,17 +143,27 @@ export async function updateCommand(): Promise<void> {
     process.exit(1);
   }
 
-  const assetName = `agents-mesh-${target}`;
+  const assetName = `agents-mesh-${target}.tar.gz`;
   const downloadUrl = `https://github.com/${REPO}/releases/download/${latest}/${assetName}`;
 
   console.log(`Downloading ${assetName}...`);
 
   try {
-    // Download to temp file then replace binary
-    const tmpPath = `${binaryPath}.tmp`;
-    execSync(`curl -fsSL "${downloadUrl}" -o "${tmpPath}"`, { stdio: "inherit" });
-    execSync(`chmod +x "${tmpPath}"`);
-    execSync(`mv "${tmpPath}" "${binaryPath}"`);
+    const tmpTar = `${binaryPath}.tar.gz.tmp`;
+    const tmpDir = `${binaryPath}.extract.tmp`;
+
+    execSync(`curl -fsSL "${downloadUrl}" -o "${tmpTar}"`, { stdio: "inherit" });
+    execSync(`mkdir -p "${tmpDir}"`);
+    execSync(`tar -xzf "${tmpTar}" -C "${tmpDir}"`);
+
+    // Binary inside tar is named agents-mesh-<target>
+    const extractedBin = `${tmpDir}/agents-mesh-${target}`;
+    execSync(`chmod +x "${extractedBin}"`);
+    execSync(`mv "${extractedBin}" "${binaryPath}"`);
+
+    // Cleanup
+    execSync(`rm -rf "${tmpTar}" "${tmpDir}"`);
+
     writeVersionCache(latest);
     console.log(`\n✓ Updated to ${latest}. Restart your agents to activate.`);
   } catch (e) {
