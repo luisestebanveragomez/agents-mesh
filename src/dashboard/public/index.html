@@ -655,8 +655,8 @@ function toggleHistory(peerId) {
 }
 
 function copyPeerId(btn, peerId) {
+  const original = btn.textContent;
   navigator.clipboard.writeText(peerId).then(() => {
-    const original = btn.textContent;
     btn.textContent = '✓ copied';
     btn.classList.add('copied');
     setTimeout(() => {
