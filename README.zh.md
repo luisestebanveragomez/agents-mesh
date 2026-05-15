@@ -1,4 +1,7 @@
-# agents-mesh
+<div align="center">
+  <img src="src/dashboard/public/logo.svg" width="64" height="64" alt="agents-mesh logo" />
+  <h1>agents-mesh</h1>
+</div>
 
 [Read in English](README.md) · [Leer en español](README.es.md)
 
