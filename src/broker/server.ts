@@ -290,7 +290,7 @@ setInterval(() => {
       logActivity("peer_timeout", `${peer.id}|${peer.role}|${peer.agent}`);
     }
   } catch {}
-}, 30_000);
+}, 10_000);
 
 // Limpieza de mensajes expirados
 setInterval(() => {
