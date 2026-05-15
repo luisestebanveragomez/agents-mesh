@@ -69,7 +69,7 @@ function mcpEntry() {
 }
 
 function opencodeMcpEntry() {
-  return { type: "local", command: ["agents-mesh", "mcp"] };
+  return { type: "local", command: ["agents-mesh", "mcp"], enabled: true };
 }
 
 // ── Config paths ───────────────────────────────────────────────────────────────
@@ -108,9 +108,7 @@ function installAgent(agent: Agent, scope: Scope): void {
     }
     case "opencode": {
       const mcp = (config.mcp as Record<string, unknown>) ?? {};
-      const servers = (mcp.servers as Record<string, unknown>) ?? {};
-      servers["agents-mesh"] = opencodeMcpEntry();
-      mcp.servers = servers;
+      mcp["agents-mesh"] = opencodeMcpEntry();
       config.mcp = mcp;
       break;
     }
@@ -151,8 +149,8 @@ function uninstallAgent(agent: Agent, scope: Scope): boolean {
       break;
     }
     case "opencode": {
-      const servers = (config.mcp as Record<string, Record<string, unknown>> | undefined)?.servers;
-      if (servers?.["agents-mesh"]) { delete servers["agents-mesh"]; found = true; }
+      const mcp = config.mcp as Record<string, unknown> | undefined;
+      if (mcp?.["agents-mesh"]) { delete mcp["agents-mesh"]; config.mcp = mcp; found = true; }
       break;
     }
     case "copilot": {
@@ -187,7 +185,7 @@ function statusAgent(agent: Agent): void {
         installed = !!(config.mcpServers as Record<string, unknown> | undefined)?.["agents-mesh"];
         break;
       case "opencode":
-        installed = !!((config.mcp as Record<string, Record<string, unknown>> | undefined)?.servers?.["agents-mesh"]);
+        installed = !!(config.mcp as Record<string, unknown> | undefined)?.["agents-mesh"];
         break;
       case "copilot":
         installed = !!(config.mcpServers as Record<string, unknown> | undefined)?.["agents-mesh"];
