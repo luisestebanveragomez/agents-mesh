@@ -597,7 +597,13 @@ function renderPeerCards(peers) {
   if (filtered.length === 0) { container.innerHTML=''; noFilter.style.display='block'; return; }
   noFilter.style.display = 'none';
 
-  container.innerHTML = filtered.map(peer => {
+  // Remove cards for peers no longer present
+  const filteredIds = new Set(filtered.map(p => p.id));
+  container.querySelectorAll('.peer-card').forEach(card => {
+    if (!filteredIds.has(card.dataset.peerId)) card.remove();
+  });
+
+  filtered.forEach(peer => {
     const color    = AGENT_COLORS[peer.agent] ?? '#64748b';
     const iconHtml = AGENT_ICONS[peer.agent]
       ? `<img src="${AGENT_ICONS[peer.agent]}" style="width:32px;height:32px;object-fit:contain;flex-shrink:0"/>`
@@ -608,39 +614,63 @@ function renderPeerCards(peers) {
     const msgsHtml = msgs.length
       ? msgs.map(l => { const p=l.split('|'); return `<div class="msg-item">${timeAgo(p[0])} · ${escapeHtml(p.slice(2).join(' · ').slice(0,80))}</div>`; }).join('')
       : `<div style="font-size:10px;color:var(--text-muted);font-style:italic">${t('noMsgs')}</div>`;
-
-    // C2: use JSON.stringify for peer.id in JS onclick contexts to prevent injection
     const safeId = JSON.stringify(peer.id);
-    return `<div class="peer-card" data-peer-id="${escapeHtml(peer.id)}" onclick="highlightFromCard(${safeId})">
-      <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-2">
-          ${iconHtml}
-          <div>
-            <div class="font-semibold text-sm" style="display:flex;align-items:center;gap:5px">
-              ${escapeHtml(peer.role)}
-              <span class="health-dot ${health.cls}" title="${escapeHtml(health.tip)}"></span>
+
+    let card = container.querySelector(`.peer-card[data-peer-id="${escapeHtml(peer.id)}"]`);
+
+    if (!card) {
+      // New peer — create full card
+      card = document.createElement('div');
+      card.className = 'peer-card';
+      card.dataset.peerId = peer.id;
+      card.setAttribute('onclick', `highlightFromCard(${safeId})`);
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            ${iconHtml}
+            <div>
+              <div class="font-semibold text-sm" style="display:flex;align-items:center;gap:5px">
+                ${escapeHtml(peer.role)}
+                <span class="health-dot ${health.cls}" data-field="health" title="${escapeHtml(health.tip)}"></span>
+              </div>
+              <div style="font-size:10px;color:var(--text-muted)">${escapeHtml(peer.agent)}${peer.agent_version!=='unknown'?' '+escapeHtml(peer.agent_version):''}</div>
             </div>
-            <div style="font-size:10px;color:var(--text-muted)">${escapeHtml(peer.agent)}${peer.agent_version!=='unknown'?' '+escapeHtml(peer.agent_version):''}</div>
+          </div>
+          <span data-field="status">${statusBadge(peer.status)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary)">
+          <div style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(peer.path)}</div>
+          ${peer.git_branch?`<div style="color:#60a5fa">⎇ ${escapeHtml(peer.git_branch)}</div>`:''}
+          <div data-field="task">${peer.current_task?`<div style="color:var(--text-primary);margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px">${escapeHtml(peer.current_task)}</div>`:''}</div>
+        </div>
+        <div class="flex items-center justify-between mt-3" style="border-top:1px solid var(--border);padding-top:8px">
+          <span style="color:var(--text-muted);font-size:10px">${escapeHtml(peer.id)}</span>
+          <div class="flex items-center gap-2">
+            <span data-field="uptime" style="color:var(--text-muted);font-size:10px">${uptime!==null?t('uptime',uptime):''}</span>
+            <button class="copy-btn" onclick="event.stopPropagation();copyPeerId(this,${safeId})">${t('copy')}</button>
           </div>
         </div>
-        ${statusBadge(peer.status)}
-      </div>
-      <div style="font-size:11px;color:var(--text-secondary)">
-        <div style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(peer.path)}</div>
-        ${peer.git_branch?`<div style="color:#60a5fa">⎇ ${escapeHtml(peer.git_branch)}</div>`:''}
-        ${peer.current_task?`<div style="color:var(--text-primary);margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px">${escapeHtml(peer.current_task)}</div>`:''}
-      </div>
-      <div class="flex items-center justify-between mt-3" style="border-top:1px solid var(--border);padding-top:8px">
-        <span style="color:var(--text-muted);font-size:10px">${escapeHtml(peer.id)}</span>
-        <div class="flex items-center gap-2">
-          ${uptime!==null?`<span style="color:var(--text-muted);font-size:10px">${t('uptime',uptime)}</span>`:''}
-          <button class="copy-btn" onclick="event.stopPropagation();copyPeerId(this,${safeId})">${t('copy')}</button>
-        </div>
-      </div>
-      <span class="msg-toggle" onclick="event.stopPropagation();toggleHistory(${safeId})">${t('msgHistory')} (${msgs.length})</span>
-      <div class="msg-history" id="hist-${escapeHtml(peer.id)}">${msgsHtml}</div>
-    </div>`;
-  }).join('');
+        <span class="msg-toggle" onclick="event.stopPropagation();toggleHistory(${safeId})" data-field="msg-toggle">${t('msgHistory')} (${msgs.length})</span>
+        <div class="msg-history" id="hist-${escapeHtml(peer.id)}">${msgsHtml}</div>`;
+      container.appendChild(card);
+    } else {
+      // Existing peer — update only dynamic fields in-place
+      const statusEl = card.querySelector('[data-field="status"]');
+      if (statusEl) statusEl.innerHTML = statusBadge(peer.status);
+
+      const healthEl = card.querySelector('[data-field="health"]');
+      if (healthEl) { healthEl.className = `health-dot ${health.cls}`; healthEl.title = health.tip; }
+
+      const taskEl = card.querySelector('[data-field="task"]');
+      if (taskEl) taskEl.innerHTML = peer.current_task ? `<div style="color:var(--text-primary);margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px">${escapeHtml(peer.current_task)}</div>` : '';
+
+      const uptimeEl = card.querySelector('[data-field="uptime"]');
+      if (uptimeEl) uptimeEl.textContent = uptime !== null ? t('uptime', uptime) : '';
+
+      const toggleEl = card.querySelector('[data-field="msg-toggle"]');
+      if (toggleEl) toggleEl.textContent = `${t('msgHistory')} (${msgs.length})`;
+    }
+  });
 }
 
 function highlightFromCard(peerId) {
