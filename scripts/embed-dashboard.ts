@@ -19,7 +19,7 @@ const MIME: Record<string, string> = {
   svg: "image/svg+xml; charset=utf-8",
 };
 
-const iconFiles = ["claude-code.svg", "gemini-cli.svg", "opencode.svg", "copilot.svg", "codex.svg"];
+const iconFiles = ["claude-code.ico", "gemini-cli.ico", "opencode.png", "copilot.jpg", "codex.png"];
 const iconMap: Record<string, string> = {};
 
 for (const file of iconFiles) {

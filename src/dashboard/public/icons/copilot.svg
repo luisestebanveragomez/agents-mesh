@@ -5,17 +5,20 @@
       <stop offset="100%" stop-color="#388BFD"/>
     </linearGradient>
   </defs>
-  <!-- Head -->
-  <ellipse cx="50" cy="42" rx="26" ry="28" fill="url(#cg)"/>
-  <!-- Eyes -->
-  <ellipse cx="40" cy="42" rx="7" ry="9" fill="white"/>
-  <ellipse cx="60" cy="42" rx="7" ry="9" fill="white"/>
-  <circle cx="41" cy="44" r="4" fill="#1a1a2e"/>
-  <circle cx="61" cy="44" r="4" fill="#1a1a2e"/>
-  <circle cx="42" cy="42" r="1.5" fill="white"/>
-  <circle cx="62" cy="42" r="1.5" fill="white"/>
-  <!-- Smile line -->
-  <path d="M40 55 Q50 62 60 55" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <!-- Body -->
-  <path d="M24 68 Q24 85 50 88 Q76 85 76 68 L70 62 Q62 72 50 72 Q38 72 30 62 Z" fill="url(#cg)"/>
+  <!-- Head shape -->
+  <path d="M50 12 C32 12 18 26 18 44 L18 58 C18 68 26 76 36 76 L36 80 C36 86 40 90 44 90 L56 90 C60 90 64 86 64 80 L64 76 C74 76 82 68 82 58 L82 44 C82 26 68 12 50 12 Z" fill="url(#cg)"/>
+  <!-- Eyes whites -->
+  <ellipse cx="38" cy="45" rx="9" ry="10" fill="white"/>
+  <ellipse cx="62" cy="45" rx="9" ry="10" fill="white"/>
+  <!-- Pupils -->
+  <circle cx="39" cy="47" r="5" fill="#1a1a2e"/>
+  <circle cx="63" cy="47" r="5" fill="#1a1a2e"/>
+  <!-- Shine -->
+  <circle cx="41" cy="44" r="2" fill="white"/>
+  <circle cx="65" cy="44" r="2" fill="white"/>
+  <!-- Smile -->
+  <path d="M39 60 Q50 67 61 60" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Ear notches -->
+  <path d="M18 52 C12 52 10 46 14 43 L18 46 Z" fill="url(#cg)"/>
+  <path d="M82 52 C88 52 90 46 86 43 L82 46 Z" fill="url(#cg)"/>
 </svg>

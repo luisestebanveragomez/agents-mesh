@@ -1,16 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <circle cx="50" cy="50" r="42" fill="#000" stroke="#fff" stroke-width="0"/>
-  <!-- OpenAI logo shape -->
-  <path d="M50 15
-    A20 20 0 0 1 70 28
-    A20 20 0 0 1 82 50
-    A20 20 0 0 1 70 72
-    A20 20 0 0 1 50 85
-    A20 20 0 0 1 30 72
-    A20 20 0 0 1 18 50
-    A20 20 0 0 1 30 28
-    A20 20 0 0 1 50 15 Z"
-    fill="none" stroke="white" stroke-width="3"/>
-  <path d="M50 28 L62 44 L62 56 L50 72 L38 56 L38 44 Z" fill="white"/>
-  <circle cx="50" cy="50" r="8" fill="#000"/>
+  <!-- OpenAI logo -->
+  <path d="M50 8 C36 8 24 16 18 28 C12 16 6 28 8 42 C2 50 2 62 8 70 C6 84 18 94 32 94 C38 100 48 102 56 98 C62 104 74 102 82 94 C94 90 100 78 98 66 C104 56 100 44 92 38 C96 24 88 10 74 8 C68 4 58 4 50 8 Z" fill="none"/>
+  <!-- Simplified OpenAI mark -->
+  <circle cx="50" cy="50" r="40" fill="none" stroke="white" stroke-width="0"/>
+  <g fill="white">
+    <!-- Hexagonal gear shape simplified -->
+    <path d="M50 12 L62 19 L62 33 L74 40 L74 60 L62 67 L62 81 L50 88 L38 81 L38 67 L26 60 L26 40 L38 33 L38 19 Z" fill="none" stroke="white" stroke-width="4"/>
+    <circle cx="50" cy="50" r="12" fill="white"/>
+  </g>
 </svg>
