@@ -4,11 +4,11 @@
 
 > **Early beta** — core features work, APIs may change before v1.0.
 
-**Let your AI agents talk to each other.**
+**A lightweight communication mesh for AI coding agents.**
 
 When you're running multiple AI coding agents — Claude Code on the frontend, Gemini CLI on the backend, OpenCode on the API — they have no idea each other exist. Every agent works in its own bubble. You become the middleman: copy-pasting context, relaying decisions, keeping everyone in sync.
 
-agents-mesh removes you from that loop.
+agents-mesh removes you from that loop. It gives each agent a set of MCP tools so they can discover each other, ask questions, and share context — all through natural language, all on localhost.
 
 <!-- GIF: two terminals + dashboard showing agents communicating in real time -->
 
@@ -16,27 +16,31 @@ agents-mesh removes you from that loop.
 
 ## How it works
 
-Each agent gets a unique session ID (`peer_ac7e701d`, `peer_f3b12c90`...) and joins a local mesh. From that point they can discover each other, ask questions, and share context — all through natural language.
+When an agent starts up with agents-mesh configured, it connects to a local broker (`localhost:7899`) and registers with a unique session ID (e.g. `peer_ac7e701d`). The broker is a lightweight HTTP server that agents-mesh starts automatically — you never need to manage it manually.
+
+Each agent sends periodic heartbeats so the broker knows who is still active. When Claude Code calls `peers_ask` targeting `peer_f3b12c90`, the broker holds the message until Gemini CLI polls for it with `peers_check` and then routes the reply back. Messages are ephemeral — they live in memory and are gone when the broker restarts.
 
 ```mermaid
 graph TD
     B[broker\nlocalhost:7899]
 
-    CC[Claude Code\npeer_ac7e701d] -->|ask| B
+    CC[Claude Code\npeer_ac7e701d] -->|peers_ask| B
     B -->|deliver| GM[Gemini CLI\npeer_f3b12c90]
-    GM -->|reply| B
+    GM -->|peers_reply| B
     B -->|deliver| CC
 
-    OC[OpenCode\npeer_d4c89a11] -->|notify| B
+    OC[OpenCode\npeer_d4c89a11] -->|peers_notify| B
     B -->|broadcast| CC
     B -->|broadcast| GM
 ```
 
-No cloud. No accounts. Everything runs on localhost.
+No cloud. No accounts. No persistent storage. Everything runs on localhost.
 
 ---
 
 ## Install
+
+**Step 1 — install the binary:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/luisestebanveragomez/agents-mesh/main/scripts/install.sh | bash
@@ -44,7 +48,7 @@ curl -fsSL https://raw.githubusercontent.com/luisestebanveragomez/agents-mesh/ma
 
 Supports macOS (arm64, x64) and Linux (x64, arm64). For Windows use [WSL](https://learn.microsoft.com/windows/wsl/install).
 
-Then add agents-mesh to your AI agents:
+**Step 2 — add agents-mesh to each AI agent you want to connect:**
 
 ```bash
 agents-mesh install claude-code
@@ -54,28 +58,124 @@ agents-mesh install copilot
 agents-mesh install codex
 ```
 
-Restart your agents — they're now connected.
+By default this installs globally (affects all your projects). Use `--local` to install only for the current directory.
+
+**Step 3 — restart your agents.** They will automatically register with the broker on startup.
+
+**Step 4 — verify:**
 
 ```bash
-agents-mesh installed   # verify
-agents-mesh dashboard   # open visual dashboard
+agents-mesh installed       # show install status for all agents
+agents-mesh dashboard       # open the web dashboard
 ```
 
 ---
 
-## Example
+## Example walkthrough
 
-**In Claude Code** — find out who's active and ask:
+This shows Claude Code asking Gemini CLI a question. Each block represents what you type in a separate terminal.
 
-> *"List the active peers"*
+**Terminal 1 — Claude Code session**
 
-> *"Ask peer_f3b12c90 what technologies this project uses"*
+Tell Claude to find the active peers:
 
-**In Gemini CLI** — the recipient checks its inbox:
+> "Use peers_list to see who's connected"
 
-> *"Check if you have any messages"*
+Claude calls `peers_list` and gets back something like:
 
-Gemini CLI sees the question, looks it up in the codebase, and replies. Claude Code receives the answer — you never switched terminals.
+```
+peer_ac7e701d  claude-code   working on frontend refactor
+peer_f3b12c90  gemini-cli    idle
+```
+
+Now ask Gemini a question:
+
+> "Ask peer_f3b12c90 what authentication library this project uses"
+
+Claude calls `peers_ask` with target `peer_f3b12c90` and the question. The broker holds the message.
+
+**Terminal 2 — Gemini CLI session**
+
+Tell Gemini to check for messages:
+
+> "Check if you have any messages from other agents"
+
+Gemini calls `peers_check` and sees:
+
+```
+msg_7f3a  from peer_ac7e701d: "what authentication library does this project use?"
+```
+
+Gemini searches the codebase, finds the answer, and replies:
+
+> "Reply to msg_7f3a: The project uses Passport.js with JWT tokens, configured in src/auth/passport.ts"
+
+**Terminal 1 — back in Claude Code**
+
+Claude's `peers_ask` call returns with Gemini's reply. Claude now has the answer — you never switched context.
+
+---
+
+## Tools reference
+
+These are the MCP tools available to every connected agent.
+
+| Tool | Parameters | What it does |
+|------|-----------|--------------|
+| `peers_list` | _(none)_ | Returns all currently active agents with their peer IDs, agent names, and current task/status |
+| `peers_ask` | `target` (peer ID or "all"), `question` (string), `timeout_ms` (optional) | Sends a question to a specific peer and waits for the reply. Blocks until the reply arrives or timeout expires |
+| `peers_check` | _(none)_ | Returns all pending messages addressed to this agent. Non-destructive — messages remain until replied to |
+| `peers_reply` | `message_id` (string), `content` (string) | Sends a reply to a specific message ID returned by `peers_check` |
+| `peers_notify` | `message` (string) | Broadcasts a message to all active agents. No reply expected |
+| `peers_search` | `topic` (string) | Asks the broker which peers have relevant context for a given topic, based on their registered tasks and recent activity |
+| `peers_status` | `task` (optional string), `status` (optional string) | Updates this agent's current task description and status. Visible to other agents via `peers_list` |
+
+**Example — Claude Code asks Gemini about the database schema:**
+
+```
+peers_ask(target="peer_f3b12c90", question="What tables are in the database? Summarize the schema.")
+```
+
+**Example — OpenCode notifies all peers of a breaking change:**
+
+```
+peers_notify(message="I just changed the User model — email field is now nullable. Update your queries.")
+```
+
+**Example — Gemini updates its status:**
+
+```
+peers_status(task="auditing API error handling", status="in_progress")
+```
+
+---
+
+## CLI reference
+
+The `agents-mesh` binary can also be used directly from the terminal, without going through an AI agent.
+
+```
+agents-mesh list                               List active peers
+agents-mesh ask <target> <question>            Ask another peer a question
+agents-mesh reply <msg_id> <response>          Reply to a message
+agents-mesh notify <message>                   Notify all peers
+agents-mesh check                              Check pending messages
+agents-mesh status [--task <t>] [--status <s>] Update your status
+
+agents-mesh install <agent> [--global|--local] Add to an AI agent
+agents-mesh uninstall <agent> [--global|--local] Remove from an AI agent
+agents-mesh uninstall --all                    Remove from all agents
+agents-mesh installed [agent]                  Show installation status
+agents-mesh update                             Update to the latest version
+
+agents-mesh doctor                             Diagnose the setup
+agents-mesh dashboard                          Open the web dashboard
+
+agents-mesh mcp                                Start the MCP server (stdio)
+agents-mesh broker                             Start the HTTP broker manually
+
+agents-mesh --version                          Print the installed version
+```
 
 ---
 
@@ -85,40 +185,30 @@ Gemini CLI sees the question, looks it up in the codebase, and replies. Claude C
 agents-mesh dashboard
 ```
 
-Opens `http://localhost:5723` — see all active agents, their current tasks, and messages flowing between them in real time.
+Opens `http://localhost:5723` in your browser. The dashboard shows:
 
-<!-- screenshot: dashboard with agent graph -->
+- **Active agents** — all connected peers, their IDs, agent types, and current task
+- **Network graph** — a live visualization of which agents are communicating with each other
+- **Message history** — recent messages, asks, replies, and broadcasts with timestamps
+- **Recent activity** — a chronological feed of events across the mesh
 
----
-
-## What agents can do
-
-| Tool | What it does |
-|------|-------------|
-| `peers_list` | See all active agents and what they're working on |
-| `peers_ask` | Ask another agent a question and wait for the answer |
-| `peers_notify` | Broadcast a message to all agents |
-| `peers_check` | Check for incoming messages |
-| `peers_reply` | Reply to a received message |
-| `peers_search` | Find which agent has context on a topic |
-| `peers_status` | Update your current task and status |
+The dashboard auto-refreshes. No login required.
 
 ---
 
 ## Supported agents
 
-| Agent | Install |
-|-------|---------|
-| Claude Code | `agents-mesh install claude-code` |
-| Gemini CLI | `agents-mesh install gemini-cli` |
-| OpenCode | `agents-mesh install opencode` |
-| GitHub Copilot | `agents-mesh install copilot` |
-| Codex | `agents-mesh install codex` |
-| Cursor, Windsurf, Cline, Roo... | [Manual config ↓](#other-agents) |
+| Agent | Install command | Config modified |
+|-------|-----------------|-----------------|
+| Claude Code | `agents-mesh install claude-code` | `~/.claude.json` (global) or `.mcp.json` (local) |
+| Gemini CLI | `agents-mesh install gemini-cli` | `~/.gemini/settings.json` (global) or `.gemini/settings.json` (local) |
+| OpenCode | `agents-mesh install opencode` | `~/.config/opencode/opencode.json` (global) or `opencode.json` (local) |
+| GitHub Copilot CLI | `agents-mesh install copilot` | `~/.copilot/mcp-config.json` (global) or `.copilot/mcp-config.json` (local) |
+| Codex | `agents-mesh install codex` | `~/.codex/config.json` (global) or `codex.json` (local) |
 
 ### Other agents
 
-Any MCP-compatible agent works. Add this to its config:
+Any MCP-compatible agent works. Add this to its MCP config manually:
 
 ```json
 {
@@ -131,50 +221,86 @@ Any MCP-compatible agent works. Add this to its config:
 }
 ```
 
----
-
-## CLI reference
-
-```
-agents-mesh install <agent> [--global|--local]    Add to an AI agent
-agents-mesh uninstall <agent> [--global|--local]  Remove from an AI agent
-agents-mesh uninstall --all                       Remove from all agents
-agents-mesh installed [agent]                     Show installation status
-agents-mesh list                                  List active peers
-agents-mesh ask <target> <question>               Ask another peer
-agents-mesh notify <message>                      Notify all peers
-agents-mesh check                                 Check pending messages
-agents-mesh reply <msg_id> <response>             Reply to a message
-agents-mesh status [--task <t>] [--status <s>]   Update your status
-agents-mesh register [--role <r>] [--agent <n>]  Register manually (without MCP)
-agents-mesh doctor                                Diagnose the setup
-agents-mesh dashboard                             Open the web dashboard
-```
+For agents that use a different MCP config format (like OpenCode), check the agent's documentation for the correct structure.
 
 ---
 
 ## Advanced install
 
+**Custom install directory:**
+
 ```bash
-# Custom install directory
-AGENTS_MESH_INSTALL_DIR=~/.local/bin curl -fsSL .../install.sh | bash
-
-# Specific version
-AGENTS_MESH_VERSION=v0.2.0 curl -fsSL .../install.sh | bash
-
-# From source
-git clone git@github.com:luisestebanveragomez/agents-mesh.git
-cd agents-mesh && bun install && bun link
+AGENTS_MESH_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/luisestebanveragomez/agents-mesh/main/scripts/install.sh | bash
 ```
+
+**Specific version:**
+
+```bash
+AGENTS_MESH_VERSION=v0.2.8 curl -fsSL https://raw.githubusercontent.com/luisestebanveragomez/agents-mesh/main/scripts/install.sh | bash
+```
+
+**From source:**
+
+```bash
+git clone https://github.com/luisestebanveragomez/agents-mesh.git
+cd agents-mesh
+bun install
+bun link
+```
+
+---
+
+## Update
+
+```bash
+agents-mesh update
+```
+
+Downloads and installs the latest release. agents-mesh also checks for updates silently on each run and prints a notice if a newer version is available.
 
 ---
 
 ## Uninstall
 
+Remove agents-mesh from all AI agents:
+
 ```bash
-agents-mesh uninstall --all        # remove from all AI agents
-sudo rm /usr/local/bin/agents-mesh # remove the binary
+agents-mesh uninstall --all
 ```
+
+Then remove the binary:
+
+```bash
+sudo rm /usr/local/bin/agents-mesh
+# or if you installed to a custom directory:
+rm ~/.local/bin/agents-mesh
+```
+
+---
+
+## FAQ
+
+**Does it work offline?**
+
+Yes. The broker runs entirely on localhost. No internet connection is required once the binary is installed.
+
+**Is communication between agents secure?**
+
+Messages travel over localhost only and never leave your machine. There is no authentication between agents — any process on your machine that knows the broker port can participate. Do not expose port 7899 to the network.
+
+**What happens when an agent disconnects?**
+
+The broker detects missed heartbeats and marks the peer as inactive. Any pending messages addressed to that peer remain in the broker's queue until they expire. Other agents will no longer see the disconnected peer in `peers_list`.
+
+**Can two agents on different machines communicate?**
+
+Not directly. The broker only listens on localhost. You could tunnel traffic with SSH port forwarding, but this is not an officially supported configuration.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
