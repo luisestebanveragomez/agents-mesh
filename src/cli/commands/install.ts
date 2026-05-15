@@ -81,7 +81,7 @@ function getConfigPath(agent: Agent, scope: Scope): string {
     case "gemini-cli":
       return scope === "global" ? join(homedir(), ".gemini", "settings.json") : join(process.cwd(), ".gemini", "settings.json");
     case "opencode":
-      return scope === "global" ? join(homedir(), ".config", "opencode", "config.json") : join(process.cwd(), "opencode.config.json");
+      return scope === "global" ? join(homedir(), ".config", "opencode", "opencode.json") : join(process.cwd(), "opencode.json");
     case "copilot":
       return scope === "global"
         ? join(homedir(), ".copilot", "mcp-config.json")
