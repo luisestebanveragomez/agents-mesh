@@ -56,8 +56,9 @@
     .stat-bar { height:3px; border-radius:2px; margin-top:8px; background:var(--border); overflow:hidden; }
     .stat-bar-fill { height:100%; border-radius:2px; transition:width 0.4s; }
 
-    .copy-btn { cursor:pointer; opacity:0.5; font-size:10px; padding:1px 5px; border:1px solid var(--border); border-radius:3px; background:transparent; color:var(--text-muted); }
+    .copy-btn { cursor:pointer; opacity:0.5; font-size:10px; padding:1px 5px; border:1px solid var(--border); border-radius:3px; background:transparent; color:var(--text-muted); transition:opacity 0.2s,color 0.2s,border-color 0.2s; }
     .copy-btn:hover { opacity:1; }
+    .copy-btn.copied { opacity:1; color:#4ade80; border-color:#4ade80; }
     .icon-btn { cursor:pointer; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:4px 8px; color:var(--text-muted); font-size:13px; display:flex; align-items:center; gap:4px; transition:border-color 0.2s,color 0.2s; white-space:nowrap; }
     .icon-btn:hover { border-color:#60a5fa; color:var(--text-primary); }
     .section-label { font-size:10px; letter-spacing:0.1em; color:var(--text-muted); margin-bottom:8px; }
@@ -633,7 +634,7 @@ function renderPeerCards(peers) {
         <span style="color:var(--text-muted);font-size:10px">${escapeHtml(peer.id)}</span>
         <div class="flex items-center gap-2">
           ${uptime!==null?`<span style="color:var(--text-muted);font-size:10px">${t('uptime',uptime)}</span>`:''}
-          <button class="copy-btn" onclick="event.stopPropagation();navigator.clipboard.writeText(${safeId})">${t('copy')}</button>
+          <button class="copy-btn" onclick="event.stopPropagation();copyPeerId(this,${safeId})">${t('copy')}</button>
         </div>
       </div>
       <span class="msg-toggle" onclick="event.stopPropagation();toggleHistory(${safeId})">${t('msgHistory')} (${msgs.length})</span>
@@ -651,6 +652,21 @@ function highlightFromCard(peerId) {
 
 function toggleHistory(peerId) {
   document.getElementById(`hist-${peerId}`)?.classList.toggle('open');
+}
+
+function copyPeerId(btn, peerId) {
+  navigator.clipboard.writeText(peerId).then(() => {
+    const original = btn.textContent;
+    btn.textContent = '✓ copied';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = original;
+      btn.classList.remove('copied');
+    }, 1800);
+  }).catch(() => {
+    btn.textContent = '✗ error';
+    setTimeout(() => { btn.textContent = original; }, 1800);
+  });
 }
 
 // ── Activity feed ──────────────────────────────────────────────────────────
