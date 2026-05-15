@@ -84,8 +84,8 @@ function getConfigPath(agent: Agent, scope: Scope): string {
       return scope === "global" ? join(homedir(), ".config", "opencode", "config.json") : join(process.cwd(), "opencode.config.json");
     case "copilot":
       return scope === "global"
-        ? join(homedir(), "Library", "Application Support", "Code", "User", "settings.json")
-        : join(process.cwd(), ".vscode", "settings.json");
+        ? join(homedir(), ".copilot", "mcp-config.json")
+        : join(process.cwd(), ".copilot", "mcp-config.json");
     case "codex":
       return scope === "global" ? join(homedir(), ".codex", "config.json") : join(process.cwd(), "codex.json");
   }
@@ -115,9 +115,9 @@ function installAgent(agent: Agent, scope: Scope): void {
       break;
     }
     case "copilot": {
-      const servers = (config["github.copilot.chat.experimental.mcpServers"] as Record<string, unknown>) ?? {};
-      servers["agents-mesh"] = mcpEntry();
-      config["github.copilot.chat.experimental.mcpServers"] = servers;
+      const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
+      mcpServers["agents-mesh"] = { type: "stdio", ...mcpEntry(), tools: ["*"] };
+      config.mcpServers = mcpServers;
       break;
     }
     case "codex": {
@@ -156,8 +156,8 @@ function uninstallAgent(agent: Agent, scope: Scope): boolean {
       break;
     }
     case "copilot": {
-      const servers = config["github.copilot.chat.experimental.mcpServers"] as Record<string, unknown> | undefined;
-      if (servers?.["agents-mesh"]) { delete servers["agents-mesh"]; config["github.copilot.chat.experimental.mcpServers"] = servers; found = true; }
+      const mcpServers = config.mcpServers as Record<string, unknown> | undefined;
+      if (mcpServers?.["agents-mesh"]) { delete mcpServers["agents-mesh"]; config.mcpServers = mcpServers; found = true; }
       break;
     }
   }
@@ -190,7 +190,7 @@ function statusAgent(agent: Agent): void {
         installed = !!((config.mcp as Record<string, Record<string, unknown>> | undefined)?.servers?.["agents-mesh"]);
         break;
       case "copilot":
-        installed = !!(config["github.copilot.chat.experimental.mcpServers"] as Record<string, unknown> | undefined)?.["agents-mesh"];
+        installed = !!(config.mcpServers as Record<string, unknown> | undefined)?.["agents-mesh"];
         break;
     }
 
