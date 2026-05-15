@@ -647,7 +647,7 @@ function renderPeerCards(peers) {
           <span style="color:var(--text-muted);font-size:10px">${escapeHtml(peer.id)}</span>
           <div class="flex items-center gap-2">
             <span data-field="uptime" style="color:var(--text-muted);font-size:10px">${uptime!==null?t('uptime',uptime):''}</span>
-            <button class="copy-btn" onclick="event.stopPropagation();copyPeerId(this,${safeId})">${t('copy')}</button>
+            <button class="copy-btn" data-copy-id="${escapeHtml(peer.id)}" onclick="event.stopPropagation();copyPeerId(this)">${t('copy')}</button>
           </div>
         </div>
         <span class="msg-toggle" onclick="event.stopPropagation();toggleHistory(${safeId})" data-field="msg-toggle">${t('msgHistory')} (${msgs.length})</span>
@@ -684,7 +684,8 @@ function toggleHistory(peerId) {
   document.getElementById(`hist-${peerId}`)?.classList.toggle('open');
 }
 
-function copyPeerId(btn, peerId) {
+function copyPeerId(btn) {
+  const peerId = btn.dataset.copyId;
   const original = btn.textContent;
   navigator.clipboard.writeText(peerId).then(() => {
     btn.textContent = '✓ copied';
