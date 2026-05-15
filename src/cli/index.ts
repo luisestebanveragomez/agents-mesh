@@ -7,10 +7,15 @@ import { notifyCommand } from "./commands/notify";
 import { checkCommand } from "./commands/check";
 import { statusCommand } from "./commands/status";
 import { doctorCommand } from "./commands/doctor";
+import { updateCommand, checkForUpdateSilent, currentVersion } from "./commands/update";
 
 const [,, command, ...rest] = process.argv;
 
 async function main() {
+  // Silent update check on every CLI run (non-blocking)
+  const skipUpdateCheck = ["mcp", "broker", "update"].includes(command);
+  if (!skipUpdateCheck) checkForUpdateSilent();
+
   switch (command) {
     case "list": {
       await listCommand();
@@ -107,8 +112,19 @@ async function main() {
       break;
     }
 
+    case "update": {
+      await updateCommand();
+      break;
+    }
+
+    case "--version":
+    case "-v": {
+      console.log(`agents-mesh v${currentVersion()}`);
+      break;
+    }
+
     default: {
-      console.log(`agents-mesh v0.1.0
+      console.log(`agents-mesh v${currentVersion()}
 
 Usage: agents-mesh <command> [options]
 
@@ -125,6 +141,7 @@ Commands:
   uninstall <agent> [--global|--local] Remove from an AI agent
   uninstall --all                    Remove from all agents
   installed [agent]                  Show installation status
+  update                             Update to the latest version
   mcp                                Start the MCP server (stdio)
   broker                             Start the HTTP broker
 
