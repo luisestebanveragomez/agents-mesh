@@ -37,13 +37,15 @@ jobs:
 
       - run: bun install
 
+      - name: Embed dashboard HTML
+        run: bun scripts/embed-dashboard.ts
+
       - name: Build standalone binary
         run: |
           bun build src/cli/index.ts \
             --compile \
             --target=${{ matrix.target }} \
-            --outfile=${{ matrix.artifact }} \
-            --asset src/dashboard/public:dashboard/public
+            --outfile=${{ matrix.artifact }}
 
       - name: Package
         run: |

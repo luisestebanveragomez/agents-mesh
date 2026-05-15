@@ -5,4 +5,4 @@ dist/
 .env
 .claude
 .idea
-.DS_Store
+.DS_Storesrc/dashboard/embedded-html.ts
