@@ -148,21 +148,30 @@ export async function updateCommand(): Promise<void> {
 
   console.log(`Downloading ${assetName}...`);
 
+  // Use /tmp to avoid permission issues when binary lives in /usr/local/bin
+  const tmpDir = execSync("mktemp -d", { encoding: "utf-8" }).trim();
+
   try {
-    const tmpTar = `${binaryPath}.tar.gz.tmp`;
-    const tmpDir = `${binaryPath}.extract.tmp`;
+    const tmpTar = `${tmpDir}/agents-mesh.tar.gz`;
 
     execSync(`curl -fsSL "${downloadUrl}" -o "${tmpTar}"`, { stdio: "inherit" });
-    execSync(`mkdir -p "${tmpDir}"`);
     execSync(`tar -xzf "${tmpTar}" -C "${tmpDir}"`);
 
-    // Binary inside tar is named agents-mesh-<target>
     const extractedBin = `${tmpDir}/agents-mesh-${target}`;
     execSync(`chmod +x "${extractedBin}"`);
-    execSync(`mv "${extractedBin}" "${binaryPath}"`);
 
-    // Cleanup
-    execSync(`rm -rf "${tmpTar}" "${tmpDir}"`);
+    // Use sudo only if we can't write to the binary's directory
+    const binDir = binaryPath.substring(0, binaryPath.lastIndexOf("/"));
+    const needsSudo = !existsSync(binDir) || (() => {
+      try { execSync(`test -w "${binDir}"`, { stdio: "pipe" }); return false; } catch { return true; }
+    })();
+
+    if (needsSudo) {
+      console.log("  Requires sudo to write to " + binDir);
+      execSync(`sudo install -m 755 "${extractedBin}" "${binaryPath}"`, { stdio: "inherit" });
+    } else {
+      execSync(`install -m 755 "${extractedBin}" "${binaryPath}"`);
+    }
 
     writeVersionCache(latest);
     console.log(`\n✓ Updated to ${latest}. Restart your agents to activate.`);
@@ -170,5 +179,7 @@ export async function updateCommand(): Promise<void> {
     console.error("Update failed. Try running with sudo or re-run the install script:");
     console.error(`  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash`);
     process.exit(1);
+  } finally {
+    execSync(`rm -rf "${tmpDir}"`);
   }
 }

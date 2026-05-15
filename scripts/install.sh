@@ -56,7 +56,7 @@ main() {
   info "Installing agents-mesh..."
   echo ""
 
-  local platform version tarball url tmpdir bin_file needs_sudo
+  local platform version tarball url tmpdir="" bin_file needs_sudo
 
   platform="$(detect_platform)"
   version="${AGENTS_MESH_VERSION:-$(get_latest_version)}"
@@ -71,7 +71,7 @@ main() {
   command -v curl >/dev/null 2>&1 || error "curl is required but not installed"
 
   tmpdir="$(mktemp -d)"
-  trap 'rm -rf "$tmpdir"' EXIT
+  trap '[ -n "$tmpdir" ] && rm -rf "$tmpdir"' EXIT
 
   info "Downloading ${tarball}..."
   if ! curl -fsSL --progress-bar "$url" -o "${tmpdir}/${tarball}"; then
