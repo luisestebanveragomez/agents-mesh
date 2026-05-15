@@ -42,7 +42,8 @@ jobs:
           bun build src/cli/index.ts \
             --compile \
             --target=${{ matrix.target }} \
-            --outfile=${{ matrix.artifact }}
+            --outfile=${{ matrix.artifact }} \
+            --asset src/dashboard/public:dashboard/public
 
       - name: Package
         run: |

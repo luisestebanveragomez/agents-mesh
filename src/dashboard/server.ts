@@ -4,7 +4,17 @@ import { readFile } from "fs/promises";
 import { DASHBOARD_PORT, BROKER_URL } from "../shared/constants";
 import { ensureBroker } from "../broker/launcher";
 
+// In dev: index.html lives next to this file in public/
+// In compiled binary: bun embeds it via --asset src/dashboard/public:dashboard/public
+// import.meta.dir in the binary resolves to the embedded asset path automatically
 const PUBLIC_DIR = join(import.meta.dir, "public");
+
+let DASHBOARD_HTML: string;
+try {
+  DASHBOARD_HTML = await Bun.file(join(PUBLIC_DIR, "index.html")).text();
+} catch {
+  DASHBOARD_HTML = "<h1>Dashboard unavailable</h1><p>Binary was built without embedded assets.</p>";
+}
 
 async function brokerGet(path: string): Promise<unknown> {
   const res = await fetch(`${BROKER_URL}${path}`);
@@ -69,12 +79,7 @@ async function handler(req: Request): Promise<Response> {
 
   // Servir archivos estáticos con sanitización de path traversal
   if (path === "/" || path === "/index.html") {
-    try {
-      const html = await readFile(join(PUBLIC_DIR, "index.html"), "utf-8");
-      return new Response(html, { headers: { ...headers, "Content-Type": "text/html" } });
-    } catch {
-      return new Response("Dashboard not found", { status: 404 });
-    }
+    return new Response(DASHBOARD_HTML, { headers: { ...headers, "Content-Type": "text/html" } });
   }
 
   if (path.endsWith(".css") || path.endsWith(".js") || path.startsWith("/icons/")) {
