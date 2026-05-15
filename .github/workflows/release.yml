@@ -44,8 +44,10 @@ jobs:
 
       - run: bun install
 
-      - name: Embed dashboard HTML
-        run: bun scripts/embed-dashboard.ts
+      - name: Embed dashboard assets
+        run: |
+          bun scripts/embed-dashboard.ts
+          bun scripts/embed-icons.ts
 
       - name: Build standalone binary
         run: |

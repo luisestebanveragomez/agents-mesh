@@ -87,15 +87,38 @@ async function handler(req: Request): Promise<Response> {
     return new Response(DASHBOARD_HTML, { headers: { ...headers, "Content-Type": "text/html" } });
   }
 
-  if (path.endsWith(".css") || path.endsWith(".js") || path.startsWith("/icons/")) {
+  if (path.startsWith("/icons/")) {
+    const filename = path.slice("/icons/".length);
+    // Try embedded icons first (compiled binary)
+    try {
+      const { EMBEDDED_ICONS } = await import("./embedded-icons");
+      const icon = EMBEDDED_ICONS[filename];
+      if (icon) {
+        const buf = Buffer.from(icon.data, "base64");
+        return new Response(buf, { headers: { ...headers, "Content-Type": icon.mime } });
+      }
+    } catch {}
+    // Fallback: serve from disk (dev mode)
+    try {
+      const safePath = resolve(PUBLIC_DIR, "icons", filename);
+      if (!safePath.startsWith(PUBLIC_DIR)) return new Response("Forbidden", { status: 403 });
+      const content = await readFile(safePath);
+      const ext = filename.split(".").pop() ?? "";
+      const types: Record<string, string> = { ico: "image/x-icon", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", svg: "image/svg+xml" };
+      return new Response(content, { headers: { ...headers, "Content-Type": types[ext] ?? "application/octet-stream" } });
+    } catch {
+      return new Response("", { status: 404 });
+    }
+  }
+
+  if (path.endsWith(".css") || path.endsWith(".js")) {
     try {
       const safePath = resolve(PUBLIC_DIR, path.slice(1));
       if (!safePath.startsWith(PUBLIC_DIR)) return new Response("Forbidden", { status: 403 });
       const content = await readFile(safePath);
       const ext = path.split(".").pop() ?? "";
-      const types: Record<string, string> = { css: "text/css", js: "application/javascript", ico: "image/x-icon", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg" };
-      const type = types[ext] ?? "application/octet-stream";
-      return new Response(content, { headers: { ...headers, "Content-Type": type } });
+      const types: Record<string, string> = { css: "text/css", js: "application/javascript" };
+      return new Response(content, { headers: { ...headers, "Content-Type": types[ext] ?? "application/octet-stream" } });
     } catch {
       return new Response("", { status: 404 });
     }

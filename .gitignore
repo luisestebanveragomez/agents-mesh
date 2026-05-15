@@ -6,3 +6,4 @@ dist/
 .claude
 .idea
 .DS_Storesrc/dashboard/embedded-html.ts
+src/dashboard/embedded-icons.ts
