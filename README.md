@@ -54,6 +54,8 @@ No cloud. No accounts. No persistent storage. Everything runs on localhost.
 
 ---
 
+<img width="1280" height="779" alt="demo-hq" src="https://github.com/user-attachments/assets/51ed09c9-b6b1-4e59-a6d7-dfc9672dc6a4" />
+
 ## Install
 
 **Step 1 — install the binary:**
