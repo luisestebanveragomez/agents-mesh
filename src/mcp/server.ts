@@ -73,7 +73,7 @@ export async function main() {
             question:          { type: "string", description: "The question to ask" },
             search_if_unknown: { type: "boolean", description: "Should the peer investigate if it doesn't know?" },
             search_scope:      { type: "string", description: "Path to search in (e.g. src/auth/)" },
-            timeout_seconds:   { type: "number", description: "Timeout in seconds (default: 30)" },
+            timeout_seconds:   { type: "number", description: "Override floor timeout in seconds. Omit to use adaptive default (idle=120s, working=600s, waiting=300s)." },
           },
         },
       },
@@ -110,7 +110,7 @@ export async function main() {
           required: ["topic"],
           properties: {
             topic:           { type: "string", description: "The topic to search for" },
-            timeout_seconds: { type: "number", description: "Timeout in seconds (default: 30)" },
+            timeout_seconds: { type: "number", description: "Override floor timeout in seconds. Omit to use adaptive default (idle=120s, working=600s, waiting=300s)." },
           },
         },
       },

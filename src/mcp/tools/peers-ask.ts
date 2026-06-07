@@ -88,21 +88,26 @@ export async function peersAskTool(args: {
 
   if (!acked) {
     // B never acknowledged — check if it's still alive
-    const { alive, status } = await isPeerAlive(target.id);
+    const { alive } = await isPeerAlive(target.id);
     if (!alive) {
       return { answered: false, timeout: true, error: `Peer ${target.role} is no longer active` };
     }
     // Alive but no ACK yet — it may not have polled yet, continue waiting
   }
 
-  // Phase 2: wait for actual response with adaptive deadline
-  // If B is working/waiting, extend deadline dynamically as long as B is still alive
-  const responseDeadline = Date.now() + adaptiveTimeout * 1000;
+  // Phase 2: wait for response using floor + silence timer + hard cap
+  const ackAt = Date.now();
+  const floorDeadline   = ackAt + adaptiveTimeout * 1000;
+  // Read at call time so tests can override via env without module-cache issues
+  const silenceMs = Number(process.env.AGENTS_MESH_PROGRESS_SILENCE_MS) || 30_000;
+  const hardCapMs = Number(process.env.AGENTS_MESH_PROGRESS_HARD_CAP_MS) || 30 * 60 * 1000;
+  const hardCapDeadline = ackAt + hardCapMs;
+  let lastProgressAt    = ackAt;
 
-  while (Date.now() < responseDeadline) {
+  while (Date.now() < hardCapDeadline) {
     await sleep(500);
 
-    const result = await brokerFetch<{ found: boolean; content?: string }>(
+    const result = await brokerFetch<{ found: boolean; content?: string; last_progress_at?: string; progress_count?: number }>(
       `/message/response/${selfId}/${msgId}`
     );
     if (result.found && result.content) {
@@ -114,18 +119,15 @@ export async function peersAskTool(args: {
       };
     }
 
-    // Every 30s, check if B is still alive — fail fast if it disappeared
-    if (Math.floor((Date.now() - (responseDeadline - adaptiveTimeout * 1000)) / 30000) > 0) {
-      const { alive, status: currentStatus } = await isPeerAlive(target.id);
-      if (!alive) {
-        return { answered: false, timeout: true, error: `Peer ${target.role} disconnected while processing` };
-      }
-      // If B came back to idle after being working, give it 30 more seconds max
-      if (currentStatus === "idle" && Date.now() > responseDeadline - 30000) {
-        break;
-      }
+    if (result.last_progress_at) {
+      lastProgressAt = new Date(result.last_progress_at).getTime();
+    }
+
+    const silenceDeadline = lastProgressAt + silenceMs;
+    if (Date.now() > floorDeadline && Date.now() > silenceDeadline) {
+      return { answered: false, timeout: true, error: "no progress" };
     }
   }
 
-  return { answered: false, timeout: true };
+  return { answered: false, timeout: true, error: "hard cap" };
 }

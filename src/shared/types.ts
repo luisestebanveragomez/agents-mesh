@@ -78,6 +78,7 @@ export interface AskResult {
   answered_by?: string;
   answered_by_agent?: AgentName;
   timeout?: boolean;
+  error?: string;
 }
 
 export interface ActivityEvent {

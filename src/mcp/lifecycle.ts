@@ -32,10 +32,14 @@ let toolListChangedNotifier: (() => void) | null = null;
 const pendingMessages: BrokerMessage[] = [];
 
 // Mensajes ya entregados al agente vía middleware, esperando peers_reply
-const deliveredMessages = new Map<string, BrokerMessage>();
+export const deliveredMessages = new Map<string, BrokerMessage>();
 
 export function getCurrentPeerId(): string | null {
   return currentPeerId;
+}
+
+export function _setCurrentPeerIdForTesting(id: string | null): void {
+  currentPeerId = id;
 }
 
 export function getPendingMessages(): BrokerMessage[] {
@@ -52,6 +56,16 @@ export function getDeliveredMessage(id: string): BrokerMessage | undefined {
 
 export function removeDeliveredMessage(id: string): void {
   deliveredMessages.delete(id);
+}
+
+export async function emitProgressSignals(
+  fetch: (path: string, opts?: RequestInit) => Promise<unknown> = brokerFetch
+): Promise<void> {
+  await Promise.all(
+    Array.from(deliveredMessages.keys()).map(msgId =>
+      fetch(`/message/progress/${msgId}`, { method: "POST" }).catch(() => {})
+    )
+  );
 }
 
 export function moveToDelivered(): void {
@@ -117,9 +131,12 @@ export async function startPeer(): Promise<string> {
     } catch {}
   }, HEARTBEAT_MS);
 
+  let pollTick = 0;
   // Polling de mensajes cada 1s
   const pollTimer = setInterval(async () => {
     if (!currentPeerId) return;
+    // Emit progress signals every 5 ticks for each in-flight Ask
+    if (++pollTick % 5 === 0) emitProgressSignals();
     try {
       const messages = await brokerFetch<BrokerMessage[]>(`/message/poll/${id}`);
       if (messages.length === 0) return;
