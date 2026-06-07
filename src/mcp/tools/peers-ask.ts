@@ -88,7 +88,7 @@ export async function peersAskTool(args: {
 
   if (!acked) {
     // B never acknowledged — check if it's still alive
-    const { alive, status } = await isPeerAlive(target.id);
+    const { alive } = await isPeerAlive(target.id);
     if (!alive) {
       return { answered: false, timeout: true, error: `Peer ${target.role} is no longer active` };
     }
