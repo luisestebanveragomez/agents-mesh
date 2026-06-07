@@ -31,7 +31,7 @@ function json(data: unknown, status = 200): Response {
   return Response.json(data, { status });
 }
 
-async function handleRequest(req: Request): Promise<Response> {
+export async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
   const method = req.method;
@@ -187,16 +187,48 @@ async function handleRequest(req: Request): Promise<Response> {
     return json(messages);
   }
 
+  // Progress signal: B emits "still working on msg X" every 5s
+  if (path.startsWith("/message/progress/") && method === "POST") {
+    const peerId = authPeer(req);
+    if (!peerId) return unauthorized();
+    const msgId = path.split("/")[3];
+    const db = getDb();
+    // Check if this is the first signal (no progress yet) before updating
+    const existing = db.query(
+      "SELECT json_extract(metadata, '$.progress.count') as count FROM messages WHERE id = ? AND to_id = ?"
+    ).get(msgId, peerId) as { count: number | null } | null;
+    const isFirst = existing && existing.count == null;
+    // Only the recipient of the message can emit progress
+    db.run(
+      `UPDATE messages
+       SET metadata = json_set(
+         COALESCE(metadata, '{}'),
+         '$.progress', json_object(
+           'last_at', ?,
+           'count', COALESCE(json_extract(metadata, '$.progress.count'), 0) + 1
+         )
+       )
+       WHERE id = ? AND to_id = ?`,
+      [now(), msgId, peerId]
+    );
+    if (isFirst) logActivity("progress_started", `${peerId}|${msgId}`);
+    return json({ ok: true });
+  }
+
   if (path.startsWith("/message/response/") && method === "POST") {
     const peerId = authPeer(req);
     if (!peerId) return unauthorized();
-    // Guardar respuesta: reutilizamos la tabla messages con type="reply"
     const parts = path.split("/");
     const targetId = parts[3];   // el peer que preguntó (quien recibe la respuesta)
     const msgId = parts[4];      // el id del mensaje original
     const body = await req.json() as { content: string; from_id: string; from_role: string; from_agent: string };
     const db = getDb();
     const responseId = `res_${msgId}`;
+    // Emit progress_ended if the ask was being tracked
+    const tracked = db.query(
+      "SELECT json_extract(metadata, '$.progress.count') as count FROM messages WHERE id = ? AND type = 'ask'"
+    ).get(msgId) as { count: number | null } | null;
+    if (tracked?.count != null) logActivity("progress_ended", `${peerId}|${targetId}|${msgId}`);
     // C3: from_id derived from token, not body
     const sender = db.query("SELECT role, agent FROM peers WHERE id = ?").get(peerId) as { role: string; agent: string } | null;
     db.run(`
@@ -208,7 +240,6 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   if (path.startsWith("/message/response/") && method === "GET") {
-    // Buscar respuesta a un mensaje específico
     const parts = path.split("/");
     const targetId = parts[3];
     const msgId = parts[4];
@@ -220,6 +251,19 @@ async function handleRequest(req: Request): Promise<Response> {
     if (response) {
       db.run("DELETE FROM messages WHERE id = ?", [responseId]);
       return json({ found: true, content: response.content });
+    }
+    // Include progress fields if present on the original ask message
+    // targetId is the asker (from_id), not the recipient (to_id)
+    const askRow = db.query(
+      "SELECT metadata FROM messages WHERE id = ? AND from_id = ? AND type = 'ask'"
+    ).get(msgId, targetId) as { metadata: string } | null;
+    if (askRow) {
+      try {
+        const meta = JSON.parse(askRow.metadata || "{}");
+        if (meta.progress?.last_at) {
+          return json({ found: false, last_progress_at: meta.progress.last_at, progress_count: meta.progress.count });
+        }
+      } catch {}
     }
     return json({ found: false });
   }
@@ -299,19 +343,17 @@ setInterval(() => {
   } catch {}
 }, 60_000);
 
-const server = serve({
-  port: BROKER_PORT,
-  hostname: "127.0.0.1",  // C1: bind only to loopback — never expose to network
-  fetch: handleRequest,
-});
-
-console.log(`agents-mesh broker v0.1.0 running on port ${server.port}`);
-
-// Cleanup al salir
-process.on("SIGTERM", () => { closeDb(); process.exit(0); });
-process.on("SIGINT",  () => { closeDb(); process.exit(0); });
-
 if (import.meta.main) {
-  // Mantener vivo
+  const server = serve({
+    port: BROKER_PORT,
+    hostname: "127.0.0.1",  // C1: bind only to loopback — never expose to network
+    fetch: handleRequest,
+  });
+
+  console.log(`agents-mesh broker v0.1.0 running on port ${server.port}`);
+
+  process.on("SIGTERM", () => { closeDb(); process.exit(0); });
+  process.on("SIGINT",  () => { closeDb(); process.exit(0); });
+
   await new Promise(() => {});
 }

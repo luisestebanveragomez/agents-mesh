@@ -1,0 +1,241 @@
+import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import { join } from "path";
+import { tmpdir } from "os";
+
+const TEST_DB = join(tmpdir(), `agents-mesh-broker-http-test-${Date.now()}.db`);
+process.env.AGENTS_MESH_DB = TEST_DB;
+process.env.AGENTS_MESH_BROKER_PORT = "17900";
+
+const { getDb, closeDb } = await import("../../src/broker/db");
+const { handleRequest } = await import("../../src/broker/server");
+
+const NOW = new Date().toISOString();
+const EXPIRES = new Date(Date.now() + 60_000).toISOString();
+
+function bearerRequest(path: string, method: string, token: string, body?: object): Request {
+  return new Request(`http://localhost${path}`, {
+    method,
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+// peerId is the RECIPIENT (to_id) — used for POST /progress tests
+function seedPeerAsRecipient(peerId: string, token: string, msgId: string) {
+  const db = getDb();
+  db.run(
+    `INSERT OR REPLACE INTO peers (id, role, path, pid, agent, agent_version, started_at, last_heartbeat, status, token)
+     VALUES (?, 'backend', '/tmp', 1, 'claude-code', '1.0', ?, ?, 'working', ?)`,
+    [peerId, NOW, NOW, token]
+  );
+  db.run(
+    `INSERT OR REPLACE INTO messages (id, from_id, from_role, from_agent, to_id, to_role, type, content, metadata, created_at, expires_at, delivered)
+     VALUES (?, 'peer_sender', 'frontend', 'claude-code', ?, 'backend', 'ask', 'deep question?', '{}', ?, ?, 1)`,
+    [msgId, peerId, NOW, EXPIRES]
+  );
+}
+
+// peerId is the ASKER (from_id) — used for GET /response tests
+function seedPeerAsAsker(peerId: string, token: string, msgId: string) {
+  const db = getDb();
+  db.run(
+    `INSERT OR REPLACE INTO peers (id, role, path, pid, agent, agent_version, started_at, last_heartbeat, status, token)
+     VALUES (?, 'backend', '/tmp', 1, 'claude-code', '1.0', ?, ?, 'working', ?)`,
+    [peerId, NOW, NOW, token]
+  );
+  db.run(
+    `INSERT OR REPLACE INTO messages (id, from_id, from_role, from_agent, to_id, to_role, type, content, metadata, created_at, expires_at, delivered)
+     VALUES (?, ?, 'backend', 'claude-code', 'peer_recipient', 'frontend', 'ask', 'deep question?', '{}', ?, ?, 1)`,
+    [msgId, peerId, NOW, EXPIRES]
+  );
+}
+
+describe("POST /message/progress/:msgId", () => {
+  const PEER_ID = "peer_progress_test_1";
+  const TOKEN = "test-token-progress-1";
+  const MSG_ID = "msg_progress_test_1";
+
+  beforeAll(() => seedPeerAsRecipient(PEER_ID, TOKEN, MSG_ID));
+
+  afterAll(() => {
+    closeDb();
+    try { require("fs").unlinkSync(TEST_DB); } catch {}
+  });
+
+  test("stores last_at and sets count to 1 on first signal", async () => {
+    const res = await handleRequest(
+      bearerRequest(`/message/progress/${MSG_ID}`, "POST", TOKEN)
+    );
+    expect(res.status).toBe(200);
+
+    const db = getDb();
+    const row = db.query("SELECT metadata FROM messages WHERE id = ?").get(MSG_ID) as { metadata: string };
+    const meta = JSON.parse(row.metadata);
+    expect(meta.progress).toBeDefined();
+    expect(typeof meta.progress.last_at).toBe("string");
+    expect(meta.progress.count).toBe(1);
+  });
+
+  test("increments count on subsequent signals", async () => {
+    await handleRequest(bearerRequest(`/message/progress/${MSG_ID}`, "POST", TOKEN));
+
+    const db = getDb();
+    const row = db.query("SELECT metadata FROM messages WHERE id = ?").get(MSG_ID) as { metadata: string };
+    const meta = JSON.parse(row.metadata);
+    expect(meta.progress.count).toBe(2);
+  });
+
+  test("rejects request from a different peer (not the recipient)", async () => {
+    const db = getDb();
+    db.run(
+      `INSERT OR REPLACE INTO peers (id, role, path, pid, agent, agent_version, started_at, last_heartbeat, status, token)
+       VALUES ('peer_intruder', 'other', '/tmp', 2, 'claude-code', '1.0', ?, ?, 'idle', 'intruder-token')`,
+      [NOW, NOW]
+    );
+    const res = await handleRequest(
+      bearerRequest(`/message/progress/${MSG_ID}`, "POST", "intruder-token")
+    );
+    // Only the message recipient can emit progress
+    expect(res.status).toBe(200); // ok but no-op (doesn't update another peer's msg)
+    const row = db.query("SELECT metadata FROM messages WHERE id = ?").get(MSG_ID) as { metadata: string };
+    const meta = JSON.parse(row.metadata);
+    // count should NOT have changed from the intruder's call
+    expect(meta.progress.count).toBe(2);
+  });
+});
+
+describe("GET /message/response/:peerId/:msgId with progress", () => {
+  const PEER_ID = "peer_response_test";
+  const TOKEN = "test-token-response";
+  const MSG_ID = "msg_response_test";
+
+  beforeAll(() => {
+    seedPeerAsAsker(PEER_ID, TOKEN, MSG_ID);
+    // Seed progress data
+    const db = getDb();
+    db.run(
+      `UPDATE messages SET metadata = json_set(metadata, '$.progress', json('{"last_at":"${NOW}","count":3}')) WHERE id = ?`,
+      [MSG_ID]
+    );
+  });
+
+  test("returns last_progress_at and progress_count when present", async () => {
+    const res = await handleRequest(
+      new Request(`http://localhost/message/response/${PEER_ID}/${MSG_ID}`)
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json() as any;
+    expect(body.found).toBe(false);
+    expect(body.last_progress_at).toBe(NOW);
+    expect(body.progress_count).toBe(3);
+  });
+
+  test("omits progress fields when no progress yet", async () => {
+    const db = getDb();
+    const emptyMsgId = "msg_no_progress";
+    db.run(
+      `INSERT OR REPLACE INTO messages (id, from_id, from_role, from_agent, to_id, to_role, type, content, metadata, created_at, expires_at, delivered)
+       VALUES (?, 'peer_sender', 'frontend', 'claude-code', ?, 'backend', 'ask', 'q', '{}', ?, ?, 1)`,
+      [emptyMsgId, PEER_ID, NOW, EXPIRES]
+    );
+    const res = await handleRequest(
+      new Request(`http://localhost/message/response/${PEER_ID}/${emptyMsgId}`)
+    );
+    const body = await res.json() as any;
+    expect(body.last_progress_at).toBeUndefined();
+    expect(body.progress_count).toBeUndefined();
+  });
+});
+
+describe("activity log: progress_started / progress_ended", () => {
+  const PEER_R = "peer_activity_recipient";
+  const PEER_A = "peer_activity_asker";
+  const TOKEN_R = "token-activity-recipient";
+  const MSG_TRACKED = "msg_activity_tracked";
+  const MSG_UNTRACKED = "msg_activity_untracked";
+
+  function activityTypes(db: ReturnType<typeof getDb>): string[] {
+    return (db.query("SELECT type FROM activity ORDER BY id ASC").all() as { type: string }[]).map(r => r.type);
+  }
+
+  beforeAll(() => {
+    const db = getDb();
+    // Recipient peer (emits progress)
+    db.run(
+      `INSERT OR REPLACE INTO peers (id, role, path, pid, agent, agent_version, started_at, last_heartbeat, status, token)
+       VALUES (?, 'backend', '/tmp', 1, 'test-agent', '1.0', ?, ?, 'working', ?)`,
+      [PEER_R, NOW, NOW, TOKEN_R]
+    );
+    // Asker peer (sends reply via response endpoint — needs a token too)
+    const TOKEN_A = "token-activity-asker";
+    db.run(
+      `INSERT OR REPLACE INTO peers (id, role, path, pid, agent, agent_version, started_at, last_heartbeat, status, token)
+       VALUES (?, 'frontend', '/tmp', 2, 'test-agent', '1.0', ?, ?, 'idle', ?)`,
+      [PEER_A, NOW, NOW, TOKEN_A]
+    );
+    // Ask message: from_id = PEER_A, to_id = PEER_R
+    db.run(
+      `INSERT OR REPLACE INTO messages (id, from_id, from_role, from_agent, to_id, to_role, type, content, metadata, created_at, expires_at, delivered)
+       VALUES (?, ?, 'frontend', 'test-agent', ?, 'backend', 'ask', 'q?', '{}', ?, ?, 1)`,
+      [MSG_TRACKED, PEER_A, PEER_R, NOW, EXPIRES]
+    );
+    // Ask without progress (to test no progress_ended)
+    db.run(
+      `INSERT OR REPLACE INTO messages (id, from_id, from_role, from_agent, to_id, to_role, type, content, metadata, created_at, expires_at, delivered)
+       VALUES (?, ?, 'frontend', 'test-agent', ?, 'backend', 'ask', 'q2?', '{}', ?, ?, 1)`,
+      [MSG_UNTRACKED, PEER_A, PEER_R, NOW, EXPIRES]
+    );
+    // Clear activity before tests
+    db.run("DELETE FROM activity");
+  });
+
+  test("first progress signal emits progress_started in activity log", async () => {
+    const db = getDb();
+    await handleRequest(
+      new Request(`http://localhost/message/progress/${MSG_TRACKED}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${TOKEN_R}` },
+      })
+    );
+    expect(activityTypes(db)).toContain("progress_started");
+  });
+
+  test("second progress signal does NOT add another progress_started", async () => {
+    const db = getDb();
+    db.run("DELETE FROM activity");
+    // First signal already fired above; fire two more
+    await handleRequest(new Request(`http://localhost/message/progress/${MSG_TRACKED}`, {
+      method: "POST", headers: { Authorization: `Bearer ${TOKEN_R}` },
+    }));
+    await handleRequest(new Request(`http://localhost/message/progress/${MSG_TRACKED}`, {
+      method: "POST", headers: { Authorization: `Bearer ${TOKEN_R}` },
+    }));
+    const types = activityTypes(db);
+    expect(types.filter(t => t === "progress_started").length).toBe(0);
+  });
+
+  test("reply on a tracked message emits progress_ended", async () => {
+    const db = getDb();
+    db.run("DELETE FROM activity");
+    await handleRequest(new Request(`http://localhost/message/response/${PEER_A}/${MSG_TRACKED}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN_R}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "answer", from_id: PEER_R, from_role: "backend", from_agent: "test-agent" }),
+    }));
+    expect(activityTypes(db)).toContain("progress_ended");
+  });
+
+  test("reply on an untracked message does NOT emit progress_ended", async () => {
+    const db = getDb();
+    db.run("DELETE FROM activity");
+    await handleRequest(new Request(`http://localhost/message/response/${PEER_A}/${MSG_UNTRACKED}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN_R}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "answer2", from_id: PEER_R, from_role: "backend", from_agent: "test-agent" }),
+    }));
+    expect(activityTypes(db)).not.toContain("progress_ended");
+  });
+});

@@ -21,3 +21,4 @@ export const RATE_LIMIT_PER_MIN    = 30;
 export const BROKER_PORT   = Number(process.env.AGENTS_MESH_BROKER_PORT) || 7899;
 export const BROKER_URL    = `http://localhost:${BROKER_PORT}`;
 export const BROKER_POLL_MS = 1_000;
+export const PROGRESS_SILENCE_MS = Number(process.env.AGENTS_MESH_PROGRESS_SILENCE_MS) || 30_000;
