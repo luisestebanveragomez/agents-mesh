@@ -239,3 +239,49 @@ describe("activity log: progress_started / progress_ended", () => {
     expect(activityTypes(db)).not.toContain("progress_ended");
   });
 });
+
+describe("asks/in-progress: ask disappears after reply is consumed", () => {
+  const ASKER = "peer_aip_asker";
+  const ANSWERER = "peer_aip_answerer";
+  const TOKEN_ANSWERER = "token-aip-answerer";
+  const MSG_ID = "msg_aip_flow_1";
+
+  beforeAll(() => {
+    const db = getDb();
+    db.run(
+      `INSERT OR REPLACE INTO peers (id, role, path, pid, agent, agent_version, started_at, last_heartbeat, status, token)
+       VALUES (?, 'backend', '/tmp', 1, 'test-agent', '1.0', ?, ?, 'working', ?)`,
+      [ANSWERER, NOW, NOW, TOKEN_ANSWERER]
+    );
+    db.run(
+      `INSERT OR REPLACE INTO peers (id, role, path, pid, agent, agent_version, started_at, last_heartbeat, status, token)
+       VALUES (?, 'frontend', '/tmp', 2, 'test-agent', '1.0', ?, ?, 'idle', 'token-aip-asker')`,
+      [ASKER, NOW, NOW]
+    );
+    db.run(
+      `INSERT OR REPLACE INTO messages (id, from_id, from_role, from_agent, to_id, to_role, type, content, metadata, created_at, expires_at, delivered)
+       VALUES (?, ?, 'frontend', 'test-agent', ?, 'backend', 'ask', 'deep q?', '{}', ?, ?, 1)`,
+      [MSG_ID, ASKER, ANSWERER, NOW, EXPIRES]
+    );
+  });
+
+  test("ask not visible after asker consumes the reply", async () => {
+    // Step 1: answerer sends reply
+    await handleRequest(new Request(`http://localhost/message/response/${ASKER}/${MSG_ID}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN_ANSWERER}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "here is the answer", from_id: ANSWERER, from_role: "backend", from_agent: "test-agent" }),
+    }));
+
+    // Step 2: asker polls and gets the reply (this deletes the res_ row)
+    const pollRes = await handleRequest(new Request(`http://localhost/message/response/${ASKER}/${MSG_ID}`));
+    const pollBody = await pollRes.json() as any;
+    expect(pollBody.found).toBe(true);
+    expect(pollBody.content).toBe("here is the answer");
+
+    // Step 3: ask must no longer appear in /asks/in-progress
+    const ipRes = await handleRequest(new Request(`http://localhost/asks/in-progress`));
+    const ipBody = await ipRes.json() as any[];
+    expect(ipBody.find((r: any) => r.id === MSG_ID)).toBeUndefined();
+  });
+});

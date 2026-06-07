@@ -236,6 +236,10 @@ export async function handleRequest(req: Request): Promise<Response> {
       VALUES (?, ?, ?, ?, ?, ?, 'reply', ?, '{}', ?, ?, 0)
     `, [responseId, peerId, sender?.role ?? body.from_role, sender?.agent ?? body.from_agent, targetId, "",
         body.content, now(), new Date(Date.now() + 120_000).toISOString()]);
+    db.run(
+      "UPDATE messages SET metadata = json_set(metadata, '$.replied_at', ?) WHERE id = ? AND type = 'ask'",
+      [now(), msgId]
+    );
     return json({ ok: true });
   }
 
@@ -280,6 +284,7 @@ export async function handleRequest(req: Request): Promise<Response> {
       FROM messages m
       WHERE m.type = 'ask'
         AND m.delivered = 1
+        AND json_extract(m.metadata, '$.replied_at') IS NULL
         AND NOT EXISTS (
           SELECT 1 FROM messages r WHERE r.id = ('res_' || m.id)
         )

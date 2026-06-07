@@ -84,6 +84,17 @@ describe("GET /asks/in-progress", () => {
     expect(body.find((r: any) => r.id === "msg_replied_1")).toBeUndefined();
   });
 
+  test("excludes ask after reply row was consumed (deleted) by the asker", async () => {
+    // replied_at in metadata = what POST /message/reply will write once fixed
+    const meta = JSON.stringify({ replied_at: NOW });
+    seedAsk({ msgId: "msg_replied_consumed_1", fromId: "peer_a", toId: "peer_b", delivered: 1, metadata: meta });
+    // no res_ row — simulates GET /message/response having already deleted it
+
+    const res = await get("/asks/in-progress");
+    const body = await res.json() as any[];
+    expect(body.find((r: any) => r.id === "msg_replied_consumed_1")).toBeUndefined();
+  });
+
   test("excludes ask that hasn't been delivered yet", async () => {
     seedAsk({ msgId: "msg_undelivered_1", fromId: "peer_a", toId: "peer_b", delivered: 0 });
 
