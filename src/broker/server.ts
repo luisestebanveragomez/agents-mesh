@@ -363,7 +363,7 @@ setInterval(() => {
   } catch {}
 }, 60_000);
 
-if (import.meta.main) {
+export async function startBroker(): Promise<void> {
   const server = serve({
     port: BROKER_PORT,
     hostname: "127.0.0.1",  // C1: bind only to loopback — never expose to network
@@ -376,4 +376,8 @@ if (import.meta.main) {
   process.on("SIGINT",  () => { closeDb(); process.exit(0); });
 
   await new Promise(() => {});
+}
+
+if (import.meta.main) {
+  await startBroker();
 }

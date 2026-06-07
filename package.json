@@ -9,9 +9,11 @@
   "scripts": {
     "dev": "bun src/mcp/server.ts",
     "test": "bun test",
-    "build": "bun build src/mcp/server.ts --outdir dist --target node",
+    "build": "bun build src/mcp/server.ts --outdir dist --target bun",
     "dashboard": "bun src/dashboard/server.ts",
-    "cli": "bun src/cli/index.ts"
+    "cli": "bun src/cli/index.ts",
+    "dev:on": "sudo sh scripts/dev-on.sh",
+    "dev:off": "sudo sh scripts/dev-off.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
