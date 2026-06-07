@@ -98,7 +98,10 @@ export async function peersAskTool(args: {
   // Phase 2: wait for response using floor + silence timer + hard cap
   const ackAt = Date.now();
   const floorDeadline   = ackAt + adaptiveTimeout * 1000;
-  const hardCapDeadline = ackAt + 30 * 60 * 1000;
+  // Read at call time so tests can override via env without module-cache issues
+  const silenceMs = Number(process.env.AGENTS_MESH_PROGRESS_SILENCE_MS) || 30_000;
+  const hardCapMs = Number(process.env.AGENTS_MESH_PROGRESS_HARD_CAP_MS) || 30 * 60 * 1000;
+  const hardCapDeadline = ackAt + hardCapMs;
   let lastProgressAt    = ackAt;
 
   while (Date.now() < hardCapDeadline) {
@@ -120,7 +123,6 @@ export async function peersAskTool(args: {
       lastProgressAt = new Date(result.last_progress_at).getTime();
     }
 
-    const silenceMs = Number(process.env.AGENTS_MESH_PROGRESS_SILENCE_MS) || 30_000;
     const silenceDeadline = lastProgressAt + silenceMs;
     if (Date.now() > floorDeadline && Date.now() > silenceDeadline) {
       return { answered: false, timeout: true, error: "no progress" };

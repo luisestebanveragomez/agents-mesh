@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { join } from "path";
 import { tmpdir } from "os";
+import type { BrokerMessage } from "../../src/broker/types";
 
 process.env.AGENTS_MESH_DATA = join(tmpdir(), "agents-mesh-lifecycle-test-" + Date.now());
 process.env.AGENTS_MESH_BROKER_PORT = "17901";
@@ -20,8 +21,8 @@ describe("lifecycle progress signal emission", () => {
 
   test("emits one progress signal per delivered message", async () => {
     const calls: string[] = [];
-    deliveredMessages.set("msg_a", {} as any);
-    deliveredMessages.set("msg_b", {} as any);
+    deliveredMessages.set("msg_a", {} as BrokerMessage);
+    deliveredMessages.set("msg_b", {} as BrokerMessage);
 
     await emitProgressSignals(async (path) => { calls.push(path as string); return {}; });
 
@@ -34,7 +35,7 @@ describe("lifecycle progress signal emission", () => {
     const calls: string[] = [];
     const fakeFetch = async (path: string) => { calls.push(path); return {}; };
 
-    deliveredMessages.set("msg_c", {} as any);
+    deliveredMessages.set("msg_c", {} as BrokerMessage);
     await emitProgressSignals(fakeFetch);
     expect(calls.filter(p => p.includes("msg_c")).length).toBe(1);
 

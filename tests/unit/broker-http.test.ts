@@ -7,7 +7,11 @@ process.env.AGENTS_MESH_DB = TEST_DB;
 process.env.AGENTS_MESH_BROKER_PORT = "17900";
 
 const { getDb, closeDb } = await import("../../src/broker/db");
-const { handleRequest } = await import("../../src/broker/server");
+const { handleRequest, runExpiredCleanup } = await import("../../src/broker/server");
+
+interface ProgressMeta { last_at: string; count: number; }
+interface ResponseBody { found: boolean; content?: string; last_progress_at?: string; progress_count?: number; }
+interface AskInProgressRow { id: string; from_id: string; from_role: string; from_agent: string; to_id: string; to_role: string; created_at: string; }
 
 const NOW = new Date().toISOString();
 const EXPIRES = new Date(Date.now() + 60_000).toISOString();
@@ -127,7 +131,7 @@ describe("GET /message/response/:peerId/:msgId with progress", () => {
       new Request(`http://localhost/message/response/${PEER_ID}/${MSG_ID}`)
     );
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = await res.json() as ResponseBody;
     expect(body.found).toBe(false);
     expect(body.last_progress_at).toBe(NOW);
     expect(body.progress_count).toBe(3);
@@ -144,7 +148,7 @@ describe("GET /message/response/:peerId/:msgId with progress", () => {
     const res = await handleRequest(
       new Request(`http://localhost/message/response/${PEER_ID}/${emptyMsgId}`)
     );
-    const body = await res.json() as any;
+    const body = await res.json() as ResponseBody;
     expect(body.last_progress_at).toBeUndefined();
     expect(body.progress_count).toBeUndefined();
   });
@@ -238,6 +242,24 @@ describe("activity log: progress_started / progress_ended", () => {
     }));
     expect(activityTypes(db)).not.toContain("progress_ended");
   });
+
+  test("expiry cleanup emits progress_ended for tracked asks that expire without reply", async () => {
+    const db = getDb();
+    db.run("DELETE FROM activity");
+    // Seed an already-expired tracked ask (expires_at in the past)
+    const expiredMsgId = "msg_expired_tracked";
+    db.run(
+      `INSERT OR REPLACE INTO messages (id, from_id, from_role, from_agent, to_id, to_role, type, content, metadata, created_at, expires_at, delivered)
+       VALUES (?, ?, 'frontend', 'test-agent', ?, 'backend', 'ask', 'q?',
+               json_object('progress', json_object('last_at', ?, 'count', 2)),
+               ?, ?, 1)`,
+      [expiredMsgId, PEER_A, PEER_R, NOW, NOW, new Date(Date.now() - 1_000).toISOString()]
+    );
+
+    // Trigger cleanup synchronously via the exported function
+    runExpiredCleanup();
+    expect(activityTypes(db)).toContain("progress_ended");
+  });
 });
 
 describe("asks/in-progress: ask disappears after reply is consumed", () => {
@@ -275,13 +297,13 @@ describe("asks/in-progress: ask disappears after reply is consumed", () => {
 
     // Step 2: asker polls and gets the reply (this deletes the res_ row)
     const pollRes = await handleRequest(new Request(`http://localhost/message/response/${ASKER}/${MSG_ID}`));
-    const pollBody = await pollRes.json() as any;
+    const pollBody = await pollRes.json() as ResponseBody;
     expect(pollBody.found).toBe(true);
     expect(pollBody.content).toBe("here is the answer");
 
     // Step 3: ask must no longer appear in /asks/in-progress
     const ipRes = await handleRequest(new Request(`http://localhost/asks/in-progress`));
-    const ipBody = await ipRes.json() as any[];
-    expect(ipBody.find((r: any) => r.id === MSG_ID)).toBeUndefined();
+    const ipBody = await ipRes.json() as AskInProgressRow[];
+    expect(ipBody.find((r: AskInProgressRow) => r.id === MSG_ID)).toBeUndefined();
   });
 });

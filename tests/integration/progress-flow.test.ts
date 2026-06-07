@@ -12,6 +12,9 @@ process.env.AGENTS_MESH_BROKER_PORT = "17950";
 const { getDb, closeDb } = await import("../../src/broker/db");
 const { handleRequest } = await import("../../src/broker/server");
 
+interface MetadataRow { metadata: string; }
+interface ResponseBody { found: boolean; content?: string; last_progress_at?: string; progress_count?: number; }
+
 const NOW = () => new Date().toISOString();
 const EXPIRES = () => new Date(Date.now() + 60_000).toISOString();
 
@@ -65,7 +68,7 @@ describe("progress signal integration: golden path", () => {
     // B ACKs
     await post(`/message/ack/${msgId}`, tokenB);
 
-    const row = db.query("SELECT metadata FROM messages WHERE id = ?").get(msgId) as any;
+    const row = db.query("SELECT metadata FROM messages WHERE id = ?").get(msgId) as MetadataRow;
     const meta = JSON.parse(row.metadata);
     expect(meta.acked_at).toBeDefined();
   });
@@ -76,7 +79,7 @@ describe("progress signal integration: golden path", () => {
     await post(`/message/progress/${msgId}`, tokenB);
 
     const db = getDb();
-    const row = db.query("SELECT metadata FROM messages WHERE id = ?").get(msgId) as any;
+    const row = db.query("SELECT metadata FROM messages WHERE id = ?").get(msgId) as MetadataRow;
     const meta = JSON.parse(row.metadata);
     expect(meta.progress.count).toBe(3);
     expect(typeof meta.progress.last_at).toBe("string");
@@ -84,7 +87,7 @@ describe("progress signal integration: golden path", () => {
 
   test("A polls response and sees last_progress_at", async () => {
     const res = await get(`/message/response/${PEER_A}/${msgId}`);
-    const body = await res.json() as any;
+    const body = await res.json() as ResponseBody;
     expect(body.found).toBe(false);
     expect(body.progress_count).toBe(3);
     expect(typeof body.last_progress_at).toBe("string");
@@ -101,7 +104,7 @@ describe("progress signal integration: golden path", () => {
 
     // A polls — should now find the reply
     const res = await get(`/message/response/${PEER_A}/${msgId}`);
-    const body = await res.json() as any;
+    const body = await res.json() as ResponseBody;
     expect(body.found).toBe(true);
     expect(body.content).toBe("42 is the answer");
   });
@@ -133,7 +136,7 @@ describe("progress signal integration: death case", () => {
 
   test("A polls response, sees no progress (B is silent)", async () => {
     const res = await get(`/message/response/${PEER_C}/${msgId2}`);
-    const body = await res.json() as any;
+    const body = await res.json() as ResponseBody;
     expect(body.found).toBe(false);
     expect(body.last_progress_at).toBeUndefined();
   });
@@ -142,13 +145,13 @@ describe("progress signal integration: death case", () => {
     await post(`/message/progress/${msgId2}`, tokenD);
 
     const db = getDb();
-    const row = db.query("SELECT metadata FROM messages WHERE id = ?").get(msgId2) as any;
+    const row = db.query("SELECT metadata FROM messages WHERE id = ?").get(msgId2) as MetadataRow;
     const meta = JSON.parse(row.metadata);
     expect(meta.progress.count).toBe(1);
 
     // B goes silent — no more signals emitted
     const res = await get(`/message/response/${PEER_C}/${msgId2}`);
-    const body = await res.json() as any;
+    const body = await res.json() as ResponseBody;
     expect(body.progress_count).toBe(1);
     expect(body.found).toBe(false);
   });

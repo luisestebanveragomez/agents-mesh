@@ -12,25 +12,25 @@ if [ ! -f "$BINARY" ]; then
   exit 1
 fi
 
-# Backup solo si no existe aún (preserva el binario prod real)
+# Back up only if the backup doesn't exist yet (preserves the real prod binary)
 if [ ! -f "$BACKUP" ]; then
   cp "$BINARY" "$BACKUP"
 fi
 
-# Siempre sobreescribir el wrapper (permite re-correr después de fixes)
+# Always overwrite the wrapper (allows re-running after fixes)
 cat > "$BINARY" <<EOF
 #!/bin/sh
 exec bun "$REPO_DIR/src/cli/index.ts" "\$@"
 EOF
 chmod +x "$BINARY"
 
-# Matar broker viejo para que el próximo comando lo levante desde source
+# Kill old broker so the next command starts it fresh from source
 BROKER_PID=$(lsof -ti :7899 2>/dev/null || true)
 if [ -n "$BROKER_PID" ]; then
   kill "$BROKER_PID" 2>/dev/null || true
-  echo "  → broker viejo (PID $BROKER_PID) terminado"
+  echo "  → old broker (PID $BROKER_PID) stopped"
 fi
 
 echo "✓ Dev mode ON — $REPO_DIR/src/cli/index.ts"
-echo "  Siguiente: agents-mesh dashboard"
-echo "  Al terminar: bun run dev:off"
+echo "  Next: agents-mesh dashboard"
+echo "  When done: bun run dev:off"

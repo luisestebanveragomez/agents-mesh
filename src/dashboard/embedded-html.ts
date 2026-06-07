@@ -781,7 +781,7 @@ function renderAsksInProgress(asks) {
   const STALE_MS = 30_000;
   container.innerHTML = asks.map(ask => {
     const lastProg = ask.progress_last_at ? new Date(ask.progress_last_at).getTime() : null;
-    const stalled  = !lastProg || (Date.now() - lastProg > STALE_MS);
+    const stalled  = lastProg !== null && (Date.now() - lastProg > STALE_MS);
     const ackAge   = ask.acked_at ? ageStr(ask.acked_at) : null;
     const progAge  = ask.progress_last_at ? ageStr(ask.progress_last_at) : null;
     const count    = ask.progress_count ?? 0;

@@ -86,7 +86,8 @@ async function main() {
 
     case "broker": {
       const { startBroker } = await import("../broker/server");
-      await startBroker();
+      startBroker();
+      await new Promise(() => {});
       break;
     }
 

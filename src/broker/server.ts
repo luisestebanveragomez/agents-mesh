@@ -193,12 +193,7 @@ export async function handleRequest(req: Request): Promise<Response> {
     if (!peerId) return unauthorized();
     const msgId = path.split("/")[3];
     const db = getDb();
-    // Check if this is the first signal (no progress yet) before updating
-    const existing = db.query(
-      "SELECT json_extract(metadata, '$.progress.count') as count FROM messages WHERE id = ? AND to_id = ?"
-    ).get(msgId, peerId) as { count: number | null } | null;
-    const isFirst = existing && existing.count == null;
-    // Only the recipient of the message can emit progress
+    // Only the recipient of the message can emit progress (WHERE to_id = peerId)
     db.run(
       `UPDATE messages
        SET metadata = json_set(
@@ -211,7 +206,11 @@ export async function handleRequest(req: Request): Promise<Response> {
        WHERE id = ? AND to_id = ?`,
       [now(), msgId, peerId]
     );
-    if (isFirst) logActivity("progress_started", `${peerId}|${msgId}`);
+    // Detect first signal by reading count after the UPDATE (avoids pre-read)
+    const after = db.query(
+      "SELECT json_extract(metadata, '$.progress.count') as count FROM messages WHERE id = ? AND to_id = ?"
+    ).get(msgId, peerId) as { count: number | null } | null;
+    if (after?.count === 1) logActivity("progress_started", `${peerId}|${msgId}`);
     return json({ ok: true });
   }
 
@@ -277,7 +276,7 @@ export async function handleRequest(req: Request): Promise<Response> {
     const db = getDb();
     const rows = db.query(`
       SELECT
-        m.id, m.from_id, m.from_agent, m.to_id, m.created_at,
+        m.id, m.from_id, m.from_role, m.from_agent, m.to_id, m.to_role, m.created_at,
         json_extract(m.metadata, '$.acked_at')           AS acked_at,
         json_extract(m.metadata, '$.progress.last_at')   AS progress_last_at,
         json_extract(m.metadata, '$.progress.count')     AS progress_count
@@ -288,8 +287,9 @@ export async function handleRequest(req: Request): Promise<Response> {
         AND NOT EXISTS (
           SELECT 1 FROM messages r WHERE r.id = ('res_' || m.id)
         )
+        AND datetime(m.created_at, '+30 minutes') > datetime('now')
       ORDER BY m.created_at ASC
-    `).all() as { id: string; from_id: string; from_agent: string; to_id: string; created_at: string; acked_at: string | null; progress_last_at: string | null; progress_count: number | null }[];
+    `).all() as { id: string; from_id: string; from_role: string; from_agent: string; to_id: string; to_role: string; created_at: string; acked_at: string | null; progress_last_at: string | null; progress_count: number | null }[];
     return json(rows);
   }
 
@@ -361,14 +361,24 @@ setInterval(() => {
   } catch {}
 }, 10_000);
 
-// Limpieza de mensajes expirados
-setInterval(() => {
-  try {
-    getDb().run("DELETE FROM messages WHERE expires_at < ? AND type != 'reply'", [now()]);
-  } catch {}
-}, 60_000);
+export function runExpiredCleanup(): void {
+  const db = getDb();
+  // Emit progress_ended for tracked asks expiring without a reply
+  const expiredTracked = db.query(
+    `SELECT id, from_id, to_id FROM messages
+     WHERE type = 'ask' AND expires_at < ?
+       AND json_extract(metadata, '$.progress.count') IS NOT NULL`
+  ).all(now()) as { id: string; from_id: string; to_id: string }[];
+  for (const row of expiredTracked) {
+    logActivity("progress_ended", `${row.to_id}|${row.from_id}|${row.id}`);
+  }
+  db.run("DELETE FROM messages WHERE expires_at < ? AND type != 'reply'", [now()]);
+}
 
-export async function startBroker(): Promise<void> {
+// Expired message cleanup
+setInterval(() => { try { runExpiredCleanup(); } catch {} }, 60_000);
+
+export function startBroker(): void {
   const server = serve({
     port: BROKER_PORT,
     hostname: "127.0.0.1",  // C1: bind only to loopback — never expose to network
@@ -379,7 +389,10 @@ export async function startBroker(): Promise<void> {
 
   process.on("SIGTERM", () => { closeDb(); process.exit(0); });
   process.on("SIGINT",  () => { closeDb(); process.exit(0); });
+}
 
+if (import.meta.main) {
+  startBroker();
   await new Promise(() => {});
 }
 

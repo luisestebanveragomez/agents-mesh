@@ -70,6 +70,7 @@ describe("peers_ask wait loop", () => {
     }) as any;
     expect(result.answered).toBe(false);
     expect(result.timeout).toBe(true);
+    expect(result.error).toBe("no progress");
   });
 
   test("extends wait while fresh progress signals arrive", async () => {

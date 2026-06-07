@@ -11,15 +11,15 @@ if [ ! -f "$BACKUP" ]; then
   exit 0
 fi
 
-# Matar broker dev antes de restaurar
+# Kill dev broker before restoring
 BROKER_PID=$(lsof -ti :7899 2>/dev/null || true)
 if [ -n "$BROKER_PID" ]; then
   kill "$BROKER_PID" 2>/dev/null || true
-  echo "  → broker dev (PID $BROKER_PID) terminado"
+  echo "  → dev broker (PID $BROKER_PID) stopped"
 fi
 
 cp "$BACKUP" "$BINARY"
 rm "$BACKUP"
 
-echo "✓ Dev mode OFF — binario prod restaurado"
-echo "  Reiniciá los agentes para que usen la versión oficial"
+echo "✓ Dev mode OFF — prod binary restored"
+echo "  Restart your agents to pick up the official version"

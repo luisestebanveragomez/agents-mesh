@@ -9,6 +9,12 @@ process.env.AGENTS_MESH_BROKER_PORT = "17910";
 const { getDb, closeDb } = await import("../../src/broker/db");
 const { handleRequest } = await import("../../src/broker/server");
 
+interface AskRow {
+  id: string; from_id: string; from_role: string; from_agent: string;
+  to_id: string; to_role: string; created_at: string;
+  acked_at: string | null; progress_last_at: string | null; progress_count: number | null;
+}
+
 const NOW = new Date().toISOString();
 const EXPIRES = new Date(Date.now() + 60_000).toISOString();
 
@@ -59,7 +65,7 @@ describe("GET /asks/in-progress", () => {
   test("returns empty array when no asks in progress", async () => {
     const res = await get("/asks/in-progress");
     expect(res.status).toBe(200);
-    const body = await res.json() as any[];
+    const body = await res.json() as AskRow[];
     expect(Array.isArray(body)).toBe(true);
     expect(body.length).toBe(0);
   });
@@ -68,8 +74,8 @@ describe("GET /asks/in-progress", () => {
     seedAsk({ msgId: "msg_active_1", fromId: "peer_a", toId: "peer_b", delivered: 1 });
 
     const res = await get("/asks/in-progress");
-    const body = await res.json() as any[];
-    const found = body.find((r: any) => r.id === "msg_active_1");
+    const body = await res.json() as AskRow[];
+    const found = body.find((r: AskRow) => r.id === "msg_active_1");
     expect(found).toBeDefined();
     expect(found.from_id).toBe("peer_a");
     expect(found.to_id).toBe("peer_b");
@@ -80,8 +86,8 @@ describe("GET /asks/in-progress", () => {
     seedReply("msg_replied_1");
 
     const res = await get("/asks/in-progress");
-    const body = await res.json() as any[];
-    expect(body.find((r: any) => r.id === "msg_replied_1")).toBeUndefined();
+    const body = await res.json() as AskRow[];
+    expect(body.find((r: AskRow) => r.id === "msg_replied_1")).toBeUndefined();
   });
 
   test("excludes ask after reply row was consumed (deleted) by the asker", async () => {
@@ -91,16 +97,16 @@ describe("GET /asks/in-progress", () => {
     // no res_ row — simulates GET /message/response having already deleted it
 
     const res = await get("/asks/in-progress");
-    const body = await res.json() as any[];
-    expect(body.find((r: any) => r.id === "msg_replied_consumed_1")).toBeUndefined();
+    const body = await res.json() as AskRow[];
+    expect(body.find((r: AskRow) => r.id === "msg_replied_consumed_1")).toBeUndefined();
   });
 
   test("excludes ask that hasn't been delivered yet", async () => {
     seedAsk({ msgId: "msg_undelivered_1", fromId: "peer_a", toId: "peer_b", delivered: 0 });
 
     const res = await get("/asks/in-progress");
-    const body = await res.json() as any[];
-    expect(body.find((r: any) => r.id === "msg_undelivered_1")).toBeUndefined();
+    const body = await res.json() as AskRow[];
+    expect(body.find((r: AskRow) => r.id === "msg_undelivered_1")).toBeUndefined();
   });
 
   test("includes progress fields when present", async () => {
@@ -111,8 +117,8 @@ describe("GET /asks/in-progress", () => {
     seedAsk({ msgId: "msg_with_progress_1", fromId: "peer_a", toId: "peer_b", delivered: 1, metadata: meta });
 
     const res = await get("/asks/in-progress");
-    const body = await res.json() as any[];
-    const found = body.find((r: any) => r.id === "msg_with_progress_1");
+    const body = await res.json() as AskRow[];
+    const found = body.find((r: AskRow) => r.id === "msg_with_progress_1");
     expect(found).toBeDefined();
     expect(found.acked_at).toBe(NOW);
     expect(found.progress_last_at).toBe(NOW);
@@ -124,8 +130,8 @@ describe("GET /asks/in-progress", () => {
     seedAsk({ msgId: "msg_acked_no_progress_1", fromId: "peer_a", toId: "peer_b", delivered: 1, metadata: meta });
 
     const res = await get("/asks/in-progress");
-    const body = await res.json() as any[];
-    const found = body.find((r: any) => r.id === "msg_acked_no_progress_1");
+    const body = await res.json() as AskRow[];
+    const found = body.find((r: AskRow) => r.id === "msg_acked_no_progress_1");
     expect(found).toBeDefined();
     expect(found.acked_at).toBe(NOW);
     expect(found.progress_last_at).toBeNull();
