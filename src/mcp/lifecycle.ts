@@ -7,6 +7,7 @@ import { BrokerPeer, BrokerMessage } from "../broker/types";
 import { writeFileSync, mkdirSync, rmSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
+import { notifyDesktop } from "./notifier";
 
 // C4: use ~/.agents-mesh/peers/ instead of /tmp/ to avoid world-writable symlink attacks
 const PEER_MAP_DIR = join(homedir(), ".agents-mesh", "peers");
@@ -24,6 +25,24 @@ function removePeerMap(): void {
 
 let currentPeerId: string | null = null;
 let cleanupDone = false;
+
+const notifiedIds = new Set<string>();
+
+export function _clearNotifiedIdsForTesting(): void {
+  notifiedIds.clear();
+}
+
+function notifyAskArrival(msg: BrokerMessage, myAgentName: string): void {
+  if (notifiedIds.has(msg.id)) return;
+  notifiedIds.add(msg.id);
+  try {
+    const body = msg.content.length > 80 ? msg.content.slice(0, 80) : msg.content;
+    notifyDesktop(
+      `[agents-mesh] ${msg.from_agent} → ${myAgentName}`,
+      `${msg.from_role} asks: "${body}"`
+    );
+  } catch {}
+}
 
 // Callback set by server.ts to trigger sendToolListChanged()
 let toolListChangedNotifier: (() => void) | null = null;
@@ -56,6 +75,27 @@ export function getDeliveredMessage(id: string): BrokerMessage | undefined {
 
 export function removeDeliveredMessage(id: string): void {
   deliveredMessages.delete(id);
+}
+
+export async function _runPollTickForTesting(
+  peerId: string,
+  fetch: (path: string, opts?: RequestInit) => Promise<unknown> = brokerFetch
+): Promise<void> {
+  const messages = await fetch(`/message/poll/${peerId}`) as BrokerMessage[];
+  if (!messages || messages.length === 0) return;
+  const myAgent = detectAgent().name;
+  for (const msg of messages) {
+    if (pendingMessages.length < 1000) {
+      pendingMessages.push(msg);
+    }
+    if (msg.type === "ask") {
+      notifyAskArrival(msg, myAgent);
+    }
+    if (msg.type === "ask" || msg.type === "notify") {
+      fetch(`/message/ack/${msg.id}`, { method: "POST" }).catch(() => {});
+    }
+  }
+  toolListChangedNotifier?.();
 }
 
 export async function emitProgressSignals(
@@ -145,6 +185,9 @@ export async function startPeer(): Promise<string> {
         // L1: cap in-memory buffer to prevent OOM
         if (pendingMessages.length < 1000) {
           pendingMessages.push(msg);
+        }
+        if (msg.type === "ask") {
+          notifyAskArrival(msg, peer.agent);
         }
         // ACK automático: avisar al emisor que el mensaje fue recibido
         if (msg.type === "ask" || msg.type === "notify") {
