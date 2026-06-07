@@ -98,6 +98,31 @@ main() {
   echo ""
   success "agents-mesh ${version} installed to ${INSTALL_DIR}/${BINARY}"
 
+  # Desktop notifications: install notify-send on Linux (macOS uses built-in osascript)
+  if [ "$(uname -s)" = "Linux" ]; then
+    if command -v notify-send >/dev/null 2>&1; then
+      success "notify-send already installed (desktop notifications enabled)"
+    elif command -v apt-get >/dev/null 2>&1; then
+      info "Installing libnotify-bin for desktop notifications..."
+      sudo apt-get install -y -qq libnotify-bin && \
+        success "libnotify-bin installed (desktop notifications enabled)" || \
+        warn "Could not install libnotify-bin — desktop notifications will be disabled"
+    elif command -v dnf >/dev/null 2>&1; then
+      info "Installing libnotify for desktop notifications..."
+      sudo dnf install -y -q libnotify && \
+        success "libnotify installed (desktop notifications enabled)" || \
+        warn "Could not install libnotify — desktop notifications will be disabled"
+    elif command -v pacman >/dev/null 2>&1; then
+      info "Installing libnotify for desktop notifications..."
+      sudo pacman -S --noconfirm --quiet libnotify && \
+        success "libnotify installed (desktop notifications enabled)" || \
+        warn "Could not install libnotify — desktop notifications will be disabled"
+    else
+      warn "Could not detect package manager — desktop notifications will be disabled"
+      warn "To enable: install libnotify (provides notify-send)"
+    fi
+  fi
+
   if ! command -v agents-mesh >/dev/null 2>&1; then
     echo ""
     warn "$INSTALL_DIR is not in your PATH. Add this to your shell config:"
