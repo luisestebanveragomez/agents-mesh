@@ -69,6 +69,11 @@ async function handler(req: Request): Promise<Response> {
     return Response.json(data, { headers });
   }
 
+  if (path === "/api/asks/in-progress") {
+    const data = await brokerGet("/asks/in-progress").catch(() => []);
+    return Response.json(data, { headers });
+  }
+
   if (path === "/api/activity") {
     const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 500); // H3: cap DoS
     const data = await brokerGet(`/activity?limit=${limit}`).catch(() => []);

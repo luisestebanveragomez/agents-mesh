@@ -268,6 +268,26 @@ export async function handleRequest(req: Request): Promise<Response> {
     return json({ found: false });
   }
 
+  // ── Asks in progress ─────────────────────────────────────
+  if (path === "/asks/in-progress" && method === "GET") {
+    const db = getDb();
+    const rows = db.query(`
+      SELECT
+        m.id, m.from_id, m.from_agent, m.to_id, m.created_at,
+        json_extract(m.metadata, '$.acked_at')           AS acked_at,
+        json_extract(m.metadata, '$.progress.last_at')   AS progress_last_at,
+        json_extract(m.metadata, '$.progress.count')     AS progress_count
+      FROM messages m
+      WHERE m.type = 'ask'
+        AND m.delivered = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM messages r WHERE r.id = ('res_' || m.id)
+        )
+      ORDER BY m.created_at ASC
+    `).all() as { id: string; from_id: string; from_agent: string; to_id: string; created_at: string; acked_at: string | null; progress_last_at: string | null; progress_count: number | null }[];
+    return json(rows);
+  }
+
   // ── Activity ──────────────────────────────────────────────
   if (path === "/activity" && method === "GET") {
     const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 500); // H3: cap DoS
