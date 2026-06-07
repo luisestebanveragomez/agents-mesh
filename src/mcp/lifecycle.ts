@@ -77,25 +77,32 @@ export function removeDeliveredMessage(id: string): void {
   deliveredMessages.delete(id);
 }
 
-export async function _runPollTickForTesting(
+async function executePollTick(
   peerId: string,
-  fetch: (path: string, opts?: RequestInit) => Promise<unknown> = brokerFetch
+  agentName: string,
+  fetch: (path: string, opts?: RequestInit) => Promise<unknown>
 ): Promise<void> {
   const messages = await fetch(`/message/poll/${peerId}`) as BrokerMessage[];
   if (!messages || messages.length === 0) return;
-  const myAgent = detectAgent().name;
   for (const msg of messages) {
     if (pendingMessages.length < 1000) {
       pendingMessages.push(msg);
     }
     if (msg.type === "ask") {
-      notifyAskArrival(msg, myAgent);
+      notifyAskArrival(msg, agentName);
     }
     if (msg.type === "ask" || msg.type === "notify") {
       fetch(`/message/ack/${msg.id}`, { method: "POST" }).catch(() => {});
     }
   }
   toolListChangedNotifier?.();
+}
+
+export async function _runPollTickForTesting(
+  peerId: string,
+  fetch: (path: string, opts?: RequestInit) => Promise<unknown> = brokerFetch
+): Promise<void> {
+  return executePollTick(peerId, detectAgent().name, fetch);
 }
 
 export async function emitProgressSignals(
@@ -178,26 +185,7 @@ export async function startPeer(): Promise<string> {
     // Emit progress signals every 5 ticks for each in-flight Ask
     if (++pollTick % 5 === 0) emitProgressSignals();
     try {
-      const messages = await brokerFetch<BrokerMessage[]>(`/message/poll/${id}`);
-      if (messages.length === 0) return;
-
-      for (const msg of messages) {
-        // L1: cap in-memory buffer to prevent OOM
-        if (pendingMessages.length < 1000) {
-          pendingMessages.push(msg);
-        }
-        if (msg.type === "ask") {
-          notifyAskArrival(msg, peer.agent);
-        }
-        // ACK automático: avisar al emisor que el mensaje fue recibido
-        if (msg.type === "ask" || msg.type === "notify") {
-          brokerFetch(`/message/ack/${msg.id}`, { method: "POST" }).catch(() => {});
-        }
-      }
-
-      // Notify the MCP client that tools list changed (triggers re-fetch of descriptions)
-      toolListChangedNotifier?.();
-
+      await executePollTick(id, peer.agent, brokerFetch);
     } catch {}
   }, BROKER_POLL_MS);
 

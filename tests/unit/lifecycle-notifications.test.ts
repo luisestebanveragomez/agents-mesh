@@ -23,6 +23,10 @@ mock.module("../../src/broker/launcher", () => ({
   brokerFetch: async () => [],
 }));
 
+mock.module("../../src/mcp/agent-detector", () => ({
+  detectAgent: () => ({ name: "test-agent", version: "1.0" }),
+}));
+
 function makeAskMsg(id: string, fromAgent = "Copilot", fromRole = "backend-dev", content = "How should I structure the auth module?"): BrokerMessage {
   return {
     id,
@@ -59,7 +63,7 @@ describe("desktop notifications on Ask arrival", () => {
     await _runPollTickForTesting("peer_self", async () => [msg]);
 
     expect(notifyCalls.length).toBe(1);
-    expect(notifyCalls[0].title).toBe("[agents-mesh] Copilot → claude-code");
+    expect(notifyCalls[0].title).toBe("[agents-mesh] Copilot → test-agent");
     expect(notifyCalls[0].message).toBe('backend-dev asks: "How should I structure the auth module?"');
   });
 
