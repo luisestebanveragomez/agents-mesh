@@ -203,7 +203,12 @@ export async function startPeer(): Promise<string> {
 
   process.on("SIGTERM", () => { cleanup().then(() => process.exit(0)); });
   process.on("SIGINT",  () => { cleanup().then(() => process.exit(0)); });
+  process.on("SIGHUP",  () => { cleanup().then(() => process.exit(0)); });
   process.on("beforeExit", async () => { await cleanup(); });
+  // When the host (Codex, Copilot, etc.) closes the MCP connection, stdin ends.
+  // This is the most reliable signal for abrupt terminal closes.
+  process.stdin.on("end",   () => { cleanup().then(() => process.exit(0)); });
+  process.stdin.on("close", () => { cleanup().then(() => process.exit(0)); });
 
   return id;
 }
