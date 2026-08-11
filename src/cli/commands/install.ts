@@ -87,8 +87,34 @@ function getConfigPath(agent: Agent, scope: Scope): string {
         ? join(homedir(), ".copilot", "mcp-config.json")
         : join(process.cwd(), ".copilot", "mcp-config.json");
     case "codex":
-      return scope === "global" ? join(homedir(), ".codex", "config.json") : join(process.cwd(), "codex.json");
+      return scope === "global" ? join(homedir(), ".codex", "config.toml") : join(process.cwd(), "codex.toml");
   }
+}
+
+// ── Codex TOML helpers ────────────────────────────────────────────────────────
+
+const CODEX_MCP_BLOCK = `\n[mcp_servers.agents-mesh]\ncommand = "agents-mesh"\nargs = ["mcp"]\n`;
+
+function installCodexToml(configPath: string): void {
+  mkdirSync(dirname(configPath), { recursive: true });
+  const existing = existsSync(configPath) ? readFileSync(configPath, "utf-8") : "";
+  if (existing.includes("[mcp_servers.agents-mesh]")) return;
+  writeFileSync(configPath, existing + CODEX_MCP_BLOCK, "utf-8");
+}
+
+function uninstallCodexToml(configPath: string): boolean {
+  if (!existsSync(configPath)) return false;
+  const content = readFileSync(configPath, "utf-8");
+  if (!content.includes("[mcp_servers.agents-mesh]")) return false;
+  // Remove the block: from [mcp_servers.agents-mesh] to the next [section] or end of file
+  const updated = content.replace(/\n?\[mcp_servers\.agents-mesh\][^\[]*/, "");
+  writeFileSync(configPath, updated, "utf-8");
+  return true;
+}
+
+function isCodexTomlInstalled(configPath: string): boolean {
+  if (!existsSync(configPath)) return false;
+  return readFileSync(configPath, "utf-8").includes("[mcp_servers.agents-mesh]");
 }
 
 // ── Install per agent ──────────────────────────────────────────────────────────
@@ -119,10 +145,10 @@ function installAgent(agent: Agent, scope: Scope): void {
       break;
     }
     case "codex": {
-      const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
-      mcpServers["agents-mesh"] = mcpEntry();
-      config.mcpServers = mcpServers;
-      break;
+      installCodexToml(configPath);
+      trackInstall(agent, scope, configPath);
+      console.log(`  MCP server added to ${configPath}`);
+      return;
     }
   }
 
@@ -142,11 +168,16 @@ function uninstallAgent(agent: Agent, scope: Scope): boolean {
 
   switch (agent) {
     case "claude-code":
-    case "gemini-cli":
-    case "codex": {
+    case "gemini-cli": {
       const mcpServers = config.mcpServers as Record<string, unknown> | undefined;
       if (mcpServers?.["agents-mesh"]) { delete mcpServers["agents-mesh"]; config.mcpServers = mcpServers; found = true; }
       break;
+    }
+    case "codex": {
+      found = uninstallCodexToml(configPath);
+      if (found) { untrackInstall(agent, scope); console.log(`  Removed agents-mesh from ${configPath}`); }
+      else { console.log(`  ${agent} (${scope}): agents-mesh not found in config.`); }
+      return;
     }
     case "opencode": {
       const mcp = config.mcp as Record<string, unknown> | undefined;
@@ -181,8 +212,10 @@ function statusAgent(agent: Agent): void {
     switch (agent) {
       case "claude-code":
       case "gemini-cli":
-      case "codex":
         installed = !!(config.mcpServers as Record<string, unknown> | undefined)?.["agents-mesh"];
+        break;
+      case "codex":
+        installed = isCodexTomlInstalled(configPath);
         break;
       case "opencode":
         installed = !!(config.mcp as Record<string, unknown> | undefined)?.["agents-mesh"];

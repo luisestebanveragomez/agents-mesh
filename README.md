@@ -222,7 +222,7 @@ The dashboard auto-refreshes. No login required.
 | Gemini CLI | `agents-mesh install gemini-cli` | `~/.gemini/settings.json` (global) or `.gemini/settings.json` (local) |
 | OpenCode | `agents-mesh install opencode` | `~/.config/opencode/opencode.json` (global) or `opencode.json` (local) |
 | GitHub Copilot CLI | `agents-mesh install copilot` | `~/.copilot/mcp-config.json` (global) or `.copilot/mcp-config.json` (local) |
-| Codex | `agents-mesh install codex` | `~/.codex/config.json` (global) or `codex.json` (local) |
+| Codex | `agents-mesh install codex` | `~/.codex/config.toml` (global) or `codex.toml` (local) |
 
 ### Other agents
 
