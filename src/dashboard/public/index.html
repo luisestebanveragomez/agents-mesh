@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>agent-mesh</title>
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.29.2/cytoscape.min.js"></script>
 <style>
   :root {
     --bg:#0b0b0c; --panel:#101012; --panel-2:#0e0e10; --line:#232326;
@@ -117,8 +118,7 @@
   .duo { display:grid; grid-template-columns:1fr 1fr; }
   .topo { border-right:1px solid var(--line); padding:26px 40px 30px; min-width:0; }
   .topo-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:20px; }
-  #topo-wrap { border:1px solid var(--line); position:relative; background:var(--panel-2); }
-  #toposvg { display:block; width:100%; height:460px; }
+  #graph { width:100%; height:460px; background:var(--panel-2); border:1px solid var(--line); background-image:radial-gradient(circle, var(--line) 1px, transparent 1px); background-size:28px 28px; }
   .topo-hint { margin-top:12px; font-size:11px; color:var(--ink-3); }
   .flow { padding:26px 40px 30px; min-width:0; }
   .flow-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
@@ -315,9 +315,7 @@
       <div class="topo-head">
         <span class="label" data-i18n="topology"></span>
       </div>
-      <div id="topo-wrap">
-        <svg id="toposvg" xmlns="http://www.w3.org/2000/svg"></svg>
-      </div>
+      <div id="graph"></div>
       <div class="topo-hint" data-i18n="clickEdgeHint"></div>
       <div class="empty" id="no-peers" data-i18n="noAgents"></div>
     </div>
@@ -422,14 +420,30 @@ function toggleLang(){ currentLang = currentLang==='en'?'es':'en'; localStorage.
 
 // ── Theme ──────────────────────────────────────────────────────────────────
 let currentTheme = localStorage.getItem('theme') || 'dark';
-function applyTheme(){ document.documentElement.setAttribute('data-theme',currentTheme); drawTopology(); }
+function applyTheme(){ document.documentElement.setAttribute('data-theme',currentTheme); if (cy) updateGraphColors(); }
 function toggleTheme(){ currentTheme = currentTheme==='dark'?'light':'dark'; localStorage.setItem('theme',currentTheme); applyTheme(); }
+function gColors() {
+  return currentTheme === 'dark'
+    ? { node:'#9b9b98', edge:'#3a3a3e', arrow:'#5c5c58', active:'#4d8dfa' }
+    : { node:'#5d5d58', edge:'#c5c3bb', arrow:'#a3a29b', active:'#2f6ee0' };
+}
+function updateGraphColors() {
+  const c = gColors();
+  cy.style()
+    .selector('node').style({ color: c.node })
+    .selector('edge').style({ 'line-color': c.edge, 'target-arrow-color': c.arrow })
+    .selector('edge.active').style({ 'line-color': c.active, 'target-arrow-color': c.active })
+    .update();
+}
 
 // ── Agent data ─────────────────────────────────────────────────────────────
 const AGENT_COLORS = { 'claude-code':'#e07840','gemini-cli':'#4d8dfa','opencode':'#9d7bfa','copilot':'#3ecf8e','codex':'#f26d9a','unknown':'#8a8a86' };
+const AGENT_LABELS = { 'claude-code':'CC','gemini-cli':'GM','opencode':'OC','copilot':'CP','codex':'CX','unknown':'?' };
 const AGENT_ICONS  = { 'claude-code':'/icons/claude-code.ico','gemini-cli':'/icons/gemini-cli.ico','opencode':'/icons/opencode.png','copilot':'/icons/copilot.jpg','codex':'/icons/codex.png' };
 
+let cy = null;
 let lastPeers = [];
+let lastPeerCount = 0;
 let filterText = '';
 let allActivityLines = [];
 let allConnections = [];
@@ -562,125 +576,124 @@ function closeConv(e) {
     document.getElementById('conv-modal').classList.remove('open');
 }
 
-// ── Topology (pure SVG) ────────────────────────────────────────────────────
-const SVGNS = 'http://www.w3.org/2000/svg';
-function el(name, attrs, children) {
-  const n = document.createElementNS(SVGNS, name);
-  for (const [k,v] of Object.entries(attrs||{})) n.setAttribute(k, v);
-  (children||[]).forEach(c => n.appendChild(c));
-  return n;
-}
-function cssVar(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
+// ── Graph (Cytoscape) ──────────────────────────────────────────────────────
+function initGraph() {
+  const c = gColors();
+  cy = cytoscape({
+    container: document.getElementById('graph'),
+    style: [
+      { selector: 'node', style: {
+          'background-color':'data(bgcolor)', 'background-image':'data(icon)',
+          'background-fit':'contain', 'background-clip':'none', 'background-opacity':0,
+          'border-width':0, label:'data(label)', color:c.node,
+          'text-valign':'bottom', 'text-halign':'center', 'text-margin-y':8,
+          'font-size':'10px', 'font-weight':'bold', 'font-family':'monospace',
+          width:72, height:72, 'text-wrap':'wrap', 'text-max-width':'160px',
+      }},
+      { selector:'node[icon = "none"]', style:{
+          'background-color':'data(color)', 'background-opacity':1, 'background-image':'none',
+          'border-width':0, color:'#fff', 'text-valign':'center', 'text-halign':'center',
+          'text-margin-y':0, label:'data(initials)', 'font-size':'14px',
+      }},
+      { selector:'node[status = "working"]', style:{ 'border-width':2,'border-color':'#3ecf8e','background-opacity':0.08,'background-color':'#3ecf8e' }},
+      { selector:'node[status = "waiting"]', style:{ 'border-width':2,'border-color':'#f5b02e','background-opacity':0.08,'background-color':'#f5b02e' }},
+      { selector:'node.highlighted', style:{ 'border-width':3,'border-color':'#4d8dfa' }},
+      { selector:'edge', style:{
+          width:1.5, 'line-color':c.edge, 'target-arrow-color':c.arrow,
+          'target-arrow-shape':'triangle', 'curve-style':'bezier',
+          opacity:0.5, 'line-style':'dashed', 'line-dash-pattern':[4,4],
+      }},
+      { selector:'edge.active', style:{
+          'line-color':c.active, 'target-arrow-color':c.active,
+          opacity:0.9, 'line-style':'solid', width:2.5,
+      }},
+      { selector:'edge:hover', style:{ opacity:1, width:3, cursor:'pointer' }},
+    ],
+    layout:{ name:'grid' },
+    userZoomingEnabled:true, userPanningEnabled:true,
+  });
 
-function drawTopology() {
-  const svg = document.getElementById('toposvg');
-  if (!svg) return;
-  const W = svg.clientWidth || 640, H = 460;
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  svg.innerHTML = '';
+  const tooltip = document.getElementById('tooltip');
+  cy.on('mouseover','node', e => {
+    const d = e.target.data();
+    document.getElementById('tt-role').textContent = d.label || d.id;
+    document.getElementById('tt-agent').textContent = d.agent || '–';
+    document.getElementById('tt-status').textContent = statusLabel(d.status || 'idle');
+    document.getElementById('tt-branch').textContent = d.branch || '–';
+    document.getElementById('tt-path').textContent = d.path || '–';
+    tooltip.style.display = 'block';
+  });
+  cy.on('mouseout','node', () => { tooltip.style.display = 'none'; });
+  cy.on('mousemove', e => {
+    tooltip.style.left = (e.originalEvent.clientX + 16) + 'px';
+    tooltip.style.top  = (e.originalEvent.clientY - 10) + 'px';
+  });
 
-  const line = cssVar('--line'), ink3 = cssVar('--ink-3'), accent = cssVar('--accent');
+  cy.on('tap','node', e => {
+    const id = e.target.id();
+    document.querySelectorAll('.peer-row').forEach(r => r.classList.remove('highlighted'));
+    cy.nodes().removeClass('highlighted');
+    e.target.addClass('highlighted');
+    highlightedPeer = id;
+    const card = document.querySelector(`.peer-row[data-peer-id="${id}"]`);
+    if (card) { card.classList.add('highlighted'); card.scrollIntoView({ behavior:'smooth', block:'nearest' }); }
+  });
 
-  // grid
-  const defs = el('defs');
-  const pat = el('pattern', { id:'grid', width:44, height:44, patternUnits:'userSpaceOnUse' });
-  pat.appendChild(el('path', { d:'M 44 0 L 0 0 0 44', fill:'none', stroke:line, 'stroke-width':'0.6' }));
-  defs.appendChild(pat);
-  svg.appendChild(defs);
-  svg.appendChild(el('rect', { x:0, y:0, width:W, height:H, fill:'url(#grid)' }));
+  cy.on('tap','edge', e => {
+    const d = e.target.data();
+    openConversation(d.source, d.target);
+  });
 
-  const peers = lastPeers;
-  document.getElementById('no-peers').style.display = peers.length ? 'none' : 'block';
-  if (!peers.length) return;
-
-  // node positions
-  const cx = W/2, cyy = H/2 - 14;
-  const pos = {};
-  if (peers.length === 1) pos[peers[0].id] = { x:cx, y:cyy };
-  else {
-    const R = Math.min(W,H)/2 - 90;
-    peers.forEach((p,i) => {
-      const a = (i / peers.length) * Math.PI*2 - Math.PI/2;
-      pos[p.id] = { x:cx + R*Math.cos(a), y:cyy + R*Math.sin(a) };
-    });
-  }
-
-  const now = Date.now();
-  const presentIds = new Set(peers.map(p=>p.id));
-
-  // edges — stubs for connections to absent peers, lines between present ones
-  const stubAngles = { i:0 };
-  allConnections.forEach(({a,b}) => {
-    const edgeId = [a,b].sort().join('--');
-    const active = now - (recentEdgeTimes[edgeId] ?? 0) < RECENT_MS;
-    const stroke = active ? accent : ink3;
-    const width  = active ? 1.8 : 0.9;
-    const opacity = active ? 0.95 : 0.5;
-    const both = presentIds.has(a) && presentIds.has(b);
-    if (both && a !== b) {
-      const l = el('line', { x1:pos[a].x, y1:pos[a].y, x2:pos[b].x, y2:pos[b].y, stroke, 'stroke-width':width, opacity, cursor:'pointer' });
-      l.style.pointerEvents = 'stroke';
-      l.addEventListener('click', () => openConversation(a,b));
-      svg.appendChild(l);
-    } else {
-      // Orphan links (past sessions) radiate from the anchor peer — or from the
-      // first present node when neither endpoint is alive (matches CONEXIONES count)
-      const anchor = presentIds.has(a) ? a : presentIds.has(b) ? b : peers[0].id;
-      const angle = (stubAngles.i++ * 2.39996) % (Math.PI*2); // golden angle spread
-      const len = 150 + (stubAngles.i%3)*40;
-      const x2 = pos[anchor].x + len*Math.cos(angle);
-      const y2 = pos[anchor].y + len*Math.sin(angle);
-      const l = el('line', { x1:pos[anchor].x, y1:pos[anchor].y, x2, y2, stroke, 'stroke-width':width, opacity, cursor:'pointer' });
-      l.style.pointerEvents = 'stroke';
-      l.addEventListener('click', () => openConversation(a,b));
-      svg.appendChild(l);
+  cy.on('tap', e => {
+    if (e.target === cy) {
+      highlightedPeer = null;
+      cy.nodes().removeClass('highlighted');
+      document.querySelectorAll('.peer-row').forEach(r => r.classList.remove('highlighted'));
     }
   });
+}
 
-  // nodes
-  const tooltip = document.getElementById('tooltip');
-  peers.forEach((p,i) => {
-    const { x, y } = pos[p.id];
-    const color = AGENT_COLORS[p.agent] ?? accent;
-    const g = el('g', { cursor:'pointer' });
-    if (p.status === 'working') g.appendChild(el('circle', { cx:x, cy:y, r:36, fill:'none', stroke:cssVar('--ok'), 'stroke-width':1, opacity:0.7 }));
-    if (p.status === 'waiting') g.appendChild(el('circle', { cx:x, cy:y, r:36, fill:'none', stroke:cssVar('--warn'), 'stroke-width':1, opacity:0.7 }));
-    g.appendChild(el('circle', { cx:x, cy:y, r:30, fill:accent, opacity:highlightedPeer && highlightedPeer!==p.id ? 0.45 : 1 }));
-    g.appendChild(el('circle', { cx:x, cy:y, r:30, fill:'none', stroke:color, 'stroke-width':2, opacity:0.9 }));
-    if (highlightedPeer === p.id) g.appendChild(el('circle', { cx:x, cy:y, r:38, fill:'none', stroke:accent, 'stroke-width':1.5 }));
-    const num = el('text', { x, y:y+4, 'text-anchor':'middle', fill:'#0b0b0c', 'font-size':12, 'font-weight':700, 'font-family':'inherit' });
-    num.textContent = pad2(i+1);
-    g.appendChild(num);
-    const lbl = el('text', { x, y:y+58, 'text-anchor':'middle', fill:cssVar('--ink'), 'font-size':11, 'letter-spacing':'2', 'font-family':'inherit' });
-    lbl.textContent = p.role.toUpperCase().slice(0,26);
-    g.appendChild(lbl);
+function updateGraph(peers) {
+  if (!cy) return;
+  document.getElementById('no-peers').style.display = peers.length ? 'none' : 'block';
+  const currentIds = new Set(peers.map(p => p.id));
+  const graphIds = new Set(cy.nodes().map(n => n.id()));
+  const countChanged = peers.length !== lastPeerCount;
 
-    g.addEventListener('mouseenter', () => {
-      document.getElementById('tt-role').textContent = p.role;
-      document.getElementById('tt-agent').textContent = p.agent ?? '–';
-      document.getElementById('tt-status').textContent = statusLabel(p.status);
-      document.getElementById('tt-branch').textContent = p.git_branch || '–';
-      document.getElementById('tt-path').textContent = p.path || '–';
-      tooltip.style.display = 'block';
-    });
-    g.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
-    g.addEventListener('mousemove', e => {
-      tooltip.style.left = (e.clientX + 16) + 'px';
-      tooltip.style.top = (e.clientY - 10) + 'px';
-    });
-    g.addEventListener('click', () => highlightPeer(p.id));
-    svg.appendChild(g);
+  cy.nodes().forEach(n => { if (!currentIds.has(n.id())) cy.remove(n); });
+
+  for (const peer of peers) {
+    const color    = AGENT_COLORS[peer.agent] ?? '#8a8a86';
+    const icon     = AGENT_ICONS[peer.agent]  ?? 'none';
+    const bgcolor  = icon !== 'none' ? 'transparent' : color;
+    const initials = AGENT_LABELS[peer.agent] ?? '?';
+    const data     = { label:peer.role, status:peer.status, color, bgcolor, icon, initials, agent:peer.agent, branch:peer.git_branch||'', path:peer.path||'' };
+    if (graphIds.has(peer.id)) cy.$(`#${peer.id}`).data(data);
+    else cy.add({ data:{ id:peer.id, ...data } });
+  }
+
+  cy.edges().forEach(e => {
+    if (!currentIds.has(e.data('source')) || !currentIds.has(e.data('target'))) cy.remove(e);
   });
+
+  const now = Date.now();
+  cy.edges().forEach(e => {
+    const age = now - (recentEdgeTimes[e.id()] ?? 0);
+    if (age < RECENT_MS) e.addClass('active'); else e.removeClass('active');
+  });
+
+  if (countChanged) {
+    lastPeerCount = peers.length;
+    cy.layout({ name:peers.length<=1?'grid':'circle', padding:80, animate:false, spacingFactor:1.6 }).run();
+    cy.resize();
+  }
 }
 
 function highlightPeer(id) {
   highlightedPeer = highlightedPeer === id ? null : id;
   document.querySelectorAll('.peer-row').forEach(c => c.classList.toggle('highlighted', c.dataset.peerId === highlightedPeer));
-  const card = document.querySelector(`.peer-row[data-peer-id="${highlightedPeer}"]`);
-  if (card) card.scrollIntoView({ behavior:'smooth', block:'nearest' });
-  drawTopology();
+  cy?.nodes().removeClass('highlighted');
+  if (highlightedPeer) cy?.$(`#${highlightedPeer}`)?.addClass('highlighted');
 }
 
 // ── Filter ─────────────────────────────────────────────────────────────────
@@ -875,8 +888,19 @@ async function fetchConnections() {
   try {
     const pairs = await fetch('/api/connections').then(r=>r.json());
     allConnections = pairs;
+    if (cy) {
+      for (const {a,b} of pairs) {
+        const edgeId = [a,b].sort().join('--');
+        if (!cy.$(`#${edgeId}`).length && cy.$(`#${a}`).length && cy.$(`#${b}`).length) {
+          cy.add({ data:{ id:edgeId, source:a, target:b } });
+        }
+      }
+      cy.edges().forEach(e => {
+        const active = pairs.some(p => [p.a,p.b].sort().join('--') === e.id());
+        if (!active) cy.remove(e);
+      });
+    }
     updateMetrics(lastPeers, pairs);
-    drawTopology();
   } catch {}
 }
 async function fetchActivity() {
@@ -903,7 +927,7 @@ async function fetchPeers() {
     updateStats(data);
     lastPeers = data.peers ?? [];
     renderPeerCards(lastPeers);
-    drawTopology();
+    updateGraph(lastPeers);
     checkNotifications(lastPeers);
     updateMetrics(lastPeers, allConnections);
   } catch {}
@@ -916,7 +940,7 @@ function connectSSE() {
       updateStats(data);
       lastPeers = data.peers ?? [];
       renderPeerCards(lastPeers);
-      drawTopology();
+      updateGraph(lastPeers);
       updateHeadline();
     } catch {}
   };
@@ -929,18 +953,19 @@ document.addEventListener('DOMContentLoaded', () => {
   applyI18n();
   tickClock();
   setInterval(tickClock, 1000);
-  (async () => {
+  initGraph();
+  requestAnimationFrame(async () => {
+    cy.resize();
     await fetchActivity();
     await fetchPeers();
     await fetchConnections();
     fetchAsksInProgress();
     connectSSE();
-  })();
+  });
   setInterval(fetchPeers, 2000);
   setInterval(fetchConnections, 3000);
   setInterval(fetchActivity, 2000);
   setInterval(fetchAsksInProgress, 3000);
-  window.addEventListener('resize', drawTopology);
 });
 </script>
 </body>
