@@ -79,13 +79,13 @@ export async function main() {
       },
       {
         name: "peers_reply",
-        description: "Reply to a message received from another peer",
+        description: "Reply to a message received from another peer. The asker cannot see your code or context — your reply is ALL they get. Be thorough: include file paths, code snippets, and concrete examples so they can act without asking again.",
         inputSchema: {
           type: "object",
           required: ["message_id", "content"],
           properties: {
             message_id: { type: "string", description: "ID of the message to reply to" },
-            content:    { type: "string", description: "The reply content" },
+            content:    { type: "string", description: "The reply content. Be complete and specific: file paths, function names, code examples, findings from your investigation. Avoid 1-2 line answers." },
           },
         },
       },

@@ -1,6 +1,6 @@
 {
   "name": "agents-mesh",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "description": "Multi-agent communication via filesystem for AI coding agents",
   "type": "module",
   "bin": {
