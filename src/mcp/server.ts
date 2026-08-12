@@ -10,12 +10,13 @@ import { peersReplyTool } from "./tools/peers-reply";
 import { peersNotifyTool } from "./tools/peers-notify";
 import { peersSearchTool } from "./tools/peers-search";
 import { peersCheckTool } from "./tools/peers-check";
+import { version as PKG_VERSION } from "../../package.json";
 
 export async function main() {
   await startPeer();
 
   const server = new Server(
-    { name: "agents-mesh", version: "0.1.0" },
+    { name: "agents-mesh", version: PKG_VERSION },
     { capabilities: { tools: {} } }
   );
 
@@ -64,16 +65,19 @@ export async function main() {
       },
       {
         name: "peers_ask",
-        description: "Ask another peer a question and wait for the reply. Accepts peer ID or role as target.",
+        description: "Ask another peer a question and wait for the reply. Accepts peer ID or role as target. Always include `context` (what you're doing and why you ask) and `expected` (the answer format you want) — they dramatically improve reply quality and avoid follow-up round-trips.",
         inputSchema: {
           type: "object",
           required: ["target", "question"],
           properties: {
             target:            { type: "string", description: "Peer ID or role (e.g. 'backend', 'peer_abc123')" },
             question:          { type: "string", description: "The question to ask" },
+            context:           { type: "string", description: "What you're working on and why you're asking (e.g. 'building the login form in src/pages/Login.tsx, need to follow the project's component patterns'). The responder can't see your context — this is all they know about your situation." },
+            expected:          { type: "string", description: "Desired answer format (e.g. 'complete code example', 'list of relevant files', '3-line summary')" },
             search_if_unknown: { type: "boolean", description: "Should the peer investigate if it doesn't know?" },
             search_scope:      { type: "string", description: "Path to search in (e.g. src/auth/)" },
             timeout_seconds:   { type: "number", description: "Override floor timeout in seconds. Omit to use adaptive default (idle=120s, working=600s, waiting=300s)." },
+            wait:              { type: "boolean", description: "Default true (block until reply). Set false to send and continue working — the reply will arrive as a pending peer message on a later tool call or peers_check." },
           },
         },
       },
@@ -167,12 +171,16 @@ export async function main() {
       const pending = getPendingMessages();
       if (pending.length > 0 && name !== "peers_check" && name !== "peers_reply") {
         const { formatForAgent } = await import("./security");
-        const formatted = pending.map(msg => formatForAgent({
-          id: msg.id, from: msg.from_id, from_role: msg.from_role, from_agent: msg.from_agent as any,
-          to: msg.to_id, to_role: msg.to_role, type: msg.type as any, content: msg.content,
-          metadata: {}, created_at: msg.created_at, expires_at: msg.expires_at,
-          read_at: null, responded_at: null,
-        })).join("\n\n---\n\n");
+        const formatted = pending.map(msg => {
+          let metadata = {};
+          try { metadata = JSON.parse((msg.metadata as unknown as string) || "{}"); } catch {}
+          return formatForAgent({
+            id: msg.id, from: msg.from_id, from_role: msg.from_role, from_agent: msg.from_agent as any,
+            to: msg.to_id, to_role: msg.to_role, type: msg.type as any, content: msg.content,
+            metadata, created_at: msg.created_at, expires_at: msg.expires_at,
+            read_at: null, responded_at: null,
+          });
+        }).join("\n\n---\n\n");
         clearPendingMessages();
 
         return {

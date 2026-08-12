@@ -45,9 +45,12 @@ async function isPeerAlive(peerId: string): Promise<{ alive: boolean; status: st
 export async function peersAskTool(args: {
   target: string;
   question: string;
+  context?: string;
+  expected?: string;
   search_if_unknown?: boolean;
   search_scope?: string;
   timeout_seconds?: number;
+  wait?: boolean;
 }): Promise<AskResult> {
   const selfId = getCurrentPeerId();
   if (!selfId) return { answered: false };
@@ -63,9 +66,14 @@ export async function peersAskTool(args: {
   const adaptiveTimeout = args.timeout_seconds ?? TIMEOUT_BY_STATUS[target.status] ?? TTL_S;
   const msgId = generateId("msg");
 
+  // Build the full question: context and expected format help the responder answer well on the first try
+  let fullQuestion = args.question;
+  if (args.context)  fullQuestion += `\n\nCONTEXTO DEL QUE PREGUNTA: ${args.context}`;
+  if (args.expected) fullQuestion += `\n\nFORMATO ESPERADO DE LA RESPUESTA: ${args.expected}`;
+
   const validation = validateMessage({
     id: msgId, from: selfId, from_role: self.role, from_agent: self.agent as any,
-    to: target.id, to_role: target.role, type: "ask", content: args.question,
+    to: target.id, to_role: target.role, type: "ask", content: fullQuestion,
     metadata: {}, created_at: now(), expires_at: expiresAt(adaptiveTimeout),
     read_at: null, responded_at: null,
   });
@@ -76,11 +84,25 @@ export async function peersAskTool(args: {
     body: JSON.stringify({
       id: msgId, from_id: selfId, from_role: self.role, from_agent: self.agent,
       to_id: target.id, to_role: target.role, type: "ask",
-      content: args.question,
-      metadata: JSON.stringify({ search_if_unknown: args.search_if_unknown, search_scope: args.search_scope }),
+      content: fullQuestion,
+      metadata: JSON.stringify({
+        search_if_unknown: args.search_if_unknown,
+        search_scope: args.search_scope,
+        timeout_seconds: adaptiveTimeout, // so the responder knows its deadline
+      }),
       created_at: now(), expires_at: expiresAt(adaptiveTimeout),
     } as BrokerMessage),
   });
+
+  // Async mode: return immediately; the reply arrives later as a pending "reply" message
+  if (args.wait === false) {
+    return {
+      answered: false,
+      async: true,
+      message_id: msgId,
+      error: `Question sent to ${target.role} (${target.id}). The reply will arrive as a pending peer message — you'll see it on your next tool call or via peers_check.`,
+    } as AskResult;
+  }
 
   // Phase 1: wait for ACK (confirms B is alive and received the message)
   const ackDeadline = Date.now() + ACK_TIMEOUT_S * 1000;

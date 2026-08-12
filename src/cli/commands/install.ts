@@ -91,6 +91,44 @@ function getConfigPath(agent: Agent, scope: Scope): string {
   }
 }
 
+// ── Claude Code Stop hook ─────────────────────────────────────────────────────
+// Wakes up idle agents: after each turn, checks for pending peer messages and
+// blocks the stop so the agent reads them with peers_check.
+
+const STOP_HOOK_CMD = "agents-mesh stop-hook";
+
+function installClaudeStopHook(): void {
+  const settingsPath = join(homedir(), ".claude", "settings.json");
+  const settings = readJson(settingsPath);
+  const hooks = (settings.hooks as Record<string, unknown[]>) ?? {};
+  const stopHooks = (hooks.Stop as { hooks?: { command?: string }[] }[]) ?? [];
+  const already = stopHooks.some(entry => entry.hooks?.some(h => h.command === STOP_HOOK_CMD));
+  if (!already) {
+    stopHooks.push({ hooks: [{ type: "command", command: STOP_HOOK_CMD } as { command: string }] });
+    hooks.Stop = stopHooks;
+    settings.hooks = hooks;
+    writeJson(settingsPath, settings);
+    console.log(`  Stop hook added to ${settingsPath} (auto-check peer messages after each turn)`);
+  }
+}
+
+function uninstallClaudeStopHook(): void {
+  const settingsPath = join(homedir(), ".claude", "settings.json");
+  if (!existsSync(settingsPath)) return;
+  const settings = readJson(settingsPath);
+  const hooks = settings.hooks as Record<string, unknown[]> | undefined;
+  const stopHooks = hooks?.Stop as { hooks?: { command?: string }[] }[] | undefined;
+  if (!stopHooks) return;
+  const filtered = stopHooks.filter(entry => !entry.hooks?.some(h => h.command === STOP_HOOK_CMD));
+  if (filtered.length !== stopHooks.length) {
+    hooks!.Stop = filtered;
+    if (filtered.length === 0) delete hooks!.Stop;
+    settings.hooks = hooks;
+    writeJson(settingsPath, settings);
+    console.log(`  Stop hook removed from ${settingsPath}`);
+  }
+}
+
 // ── Codex TOML helpers ────────────────────────────────────────────────────────
 
 const CODEX_MCP_BLOCK = `\n[mcp_servers.agents-mesh]\ncommand = "agents-mesh"\nargs = ["mcp"]\n`;
@@ -125,7 +163,13 @@ function installAgent(agent: Agent, scope: Scope): void {
   const config = readJson(configPath);
 
   switch (agent) {
-    case "claude-code":
+    case "claude-code": {
+      const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
+      mcpServers["agents-mesh"] = mcpEntry();
+      config.mcpServers = mcpServers;
+      if (scope === "global") installClaudeStopHook();
+      break;
+    }
     case "gemini-cli": {
       const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
       mcpServers["agents-mesh"] = mcpEntry();
@@ -167,7 +211,12 @@ function uninstallAgent(agent: Agent, scope: Scope): boolean {
   let found = false;
 
   switch (agent) {
-    case "claude-code":
+    case "claude-code": {
+      const mcpServers = config.mcpServers as Record<string, unknown> | undefined;
+      if (mcpServers?.["agents-mesh"]) { delete mcpServers["agents-mesh"]; config.mcpServers = mcpServers; found = true; }
+      if (scope === "global") uninstallClaudeStopHook();
+      break;
+    }
     case "gemini-cli": {
       const mcpServers = config.mcpServers as Record<string, unknown> | undefined;
       if (mcpServers?.["agents-mesh"]) { delete mcpServers["agents-mesh"]; config.mcpServers = mcpServers; found = true; }

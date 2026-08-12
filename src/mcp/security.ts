@@ -50,13 +50,26 @@ export function validateMessage(msg: Message): ValidationResult {
 }
 
 export function formatForAgent(msg: Message): string {
+  const meta = (msg.metadata ?? {}) as { timeout_seconds?: number; search_if_unknown?: boolean; search_scope?: string };
+
+  const deadline = meta.timeout_seconds
+    ? `\n- TIEMPO: el agente que pregunta espera respuesta en ~${meta.timeout_seconds}s. Calibra cuánto investigas. Una respuesta parcial a tiempo vale más que una completa que llega tarde.`
+    : "";
+
+  const investigate = meta.search_if_unknown
+    ? `\n- Si no sabes la respuesta, INVESTIGA${meta.search_scope ? ` (solo dentro de ${meta.search_scope})` : " en el codebase"} con esfuerzo acotado. Si el tiempo no alcanza, responde con lo que encontraste + dónde seguir buscando.`
+    : `\n- Si ya tienes el contexto cargado (trabajas en ese código), responde directo — no re-explores. Si no lo sabes con certeza, dilo explícitamente en NOTAS.`;
+
   const replyGuidance = msg.type === "ask"
     ? `
 CÓMO RESPONDER BIEN:
 - El agente que pregunta NO tiene acceso a tu código ni a tu contexto — tu respuesta es todo lo que verá.
-- Responde de forma COMPLETA: incluye rutas de archivos, nombres de funciones, fragmentos de código y ejemplos concretos.
-- Si investigaste en el codebase, comparte lo que encontraste (archivos relevantes, patrones existentes, configuración).
-- Una respuesta de 2 líneas casi nunca es suficiente. Apunta a una respuesta que le permita al otro agente actuar sin volver a preguntar.
+- Responde de forma COMPLETA: rutas de archivos, nombres de funciones, fragmentos de código y ejemplos concretos. Una respuesta de 2 líneas casi nunca es suficiente.${deadline}${investigate}
+- Estructura tu respuesta así:
+    RESPUESTA: (lo esencial en 1-2 líneas)
+    ARCHIVOS: (rutas relevantes)
+    EJEMPLO: (código si aplica)
+    NOTAS: (advertencias, supuestos, qué no verificaste)
 - Para responder: usa peers_reply("${msg.id}", tu_respuesta_detallada)`
     : `
 Para responder: usa peers_reply("${msg.id}", tu_respuesta)`;

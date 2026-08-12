@@ -2,6 +2,13 @@ import { serve } from "bun";
 import { randomBytes } from "crypto";
 import { getDb, closeDb } from "./db";
 import { BrokerPeer, BrokerMessage } from "./types";
+import { version as PKG_VERSION } from "../../package.json";
+
+// C6: never expose per-peer auth tokens through read endpoints
+function stripToken<T extends { token?: string | null }>(row: T): Omit<T, "token"> {
+  const { token: _token, ...rest } = row;
+  return rest;
+}
 
 const BROKER_PORT = Number(process.env.AGENTS_MESH_BROKER_PORT) || 7899;
 const DEAD_PEER_THRESHOLD_S = 60;
@@ -38,15 +45,15 @@ export async function handleRequest(req: Request): Promise<Response> {
 
   // ── Health ──────────────────────────────────────────────
   if (path === "/health" && method === "GET") {
-    return json({ ok: true, version: "0.1.0" });
+    return json({ ok: true, version: PKG_VERSION });
   }
 
   // ── Peers ────────────────────────────────────────────────
   if (path === "/peers" && method === "GET") {
     const db = getDb();
     const threshold = new Date(Date.now() - DEAD_PEER_THRESHOLD_S * 1000).toISOString();
-    const peers = db.query("SELECT * FROM peers WHERE last_heartbeat > ?").all(threshold);
-    return json(peers);
+    const peers = db.query("SELECT * FROM peers WHERE last_heartbeat > ?").all(threshold) as BrokerPeer[];
+    return json(peers.map(stripToken));
   }
 
   if (path === "/peer/register" && method === "POST") {
@@ -234,7 +241,7 @@ export async function handleRequest(req: Request): Promise<Response> {
       INSERT OR REPLACE INTO messages (id, from_id, from_role, from_agent, to_id, to_role, type, content, metadata, created_at, expires_at, delivered)
       VALUES (?, ?, ?, ?, ?, ?, 'reply', ?, '{}', ?, ?, 0)
     `, [responseId, peerId, sender?.role ?? body.from_role, sender?.agent ?? body.from_agent, targetId, "",
-        body.content, now(), new Date(Date.now() + 120_000).toISOString()]);
+        body.content, now(), new Date(Date.now() + 15 * 60_000).toISOString()]); // 15 min — survive slow investigations and delayed polls
     db.run(
       "UPDATE messages SET metadata = json_set(metadata, '$.replied_at', ?) WHERE id = ? AND type = 'ask'",
       [now(), msgId]
@@ -296,10 +303,16 @@ export async function handleRequest(req: Request): Promise<Response> {
   // ── Activity ──────────────────────────────────────────────
   if (path === "/activity" && method === "GET") {
     const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 500); // H3: cap DoS
+    const since = url.searchParams.get("since"); // ISO timestamp — incremental polling
     const db = getDb();
-    const rows = db.query(
-      "SELECT timestamp, type, data FROM activity ORDER BY id DESC LIMIT ?"
-    ).all(limit) as { timestamp: string; type: string; data: string }[];
+    const rows = (since
+      ? db.query("SELECT timestamp, type, data FROM activity WHERE timestamp > ? ORDER BY id DESC LIMIT ?").all(since, limit)
+      : db.query("SELECT timestamp, type, data FROM activity ORDER BY id DESC LIMIT ?").all(limit)
+    ) as { timestamp: string; type: string; data: string }[];
+    // format=json → structured objects; default stays pipe-delimited for the dashboard
+    if (url.searchParams.get("format") === "json") {
+      return json(rows);
+    }
     const lines = rows.map(r => `${r.timestamp}|${r.type}|${r.data}`);
     return json(lines);
   }
@@ -330,7 +343,7 @@ export async function handleRequest(req: Request): Promise<Response> {
       working: peers.filter(p => p.status === "working").length,
       waiting: peers.filter(p => p.status === "waiting").length,
       idle: peers.filter(p => p.status === "idle").length,
-      peers,
+      peers: peers.map(stripToken),
     });
   }
 
@@ -385,7 +398,7 @@ export function startBroker(): void {
     fetch: handleRequest,
   });
 
-  console.log(`agents-mesh broker v0.1.0 running on port ${server.port}`);
+  console.log(`agents-mesh broker v${PKG_VERSION} running on port ${server.port}`);
 
   process.on("SIGTERM", () => { closeDb(); process.exit(0); });
   process.on("SIGINT",  () => { closeDb(); process.exit(0); });
@@ -394,8 +407,4 @@ export function startBroker(): void {
 if (import.meta.main) {
   startBroker();
   await new Promise(() => {});
-}
-
-if (import.meta.main) {
-  await startBroker();
 }

@@ -31,9 +31,9 @@ export function detectAgent(): AgentInfo {
 
 function getParentProcessName(): string {
   try {
-    // Walk up 4 levels of the process tree to find the agent
+    // Walk up 8 levels of the process tree to find the agent (Codex/Copilot use wrapper processes)
     let pid = process.ppid;
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 8; i++) {
       const line = execSync(`ps -o comm=,ppid= -p ${pid}`, { encoding: "utf-8" }).trim();
       const [comm, ppidStr] = line.split(/\s+/);
       const name = (comm ?? "").toLowerCase();

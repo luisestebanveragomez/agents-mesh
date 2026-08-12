@@ -79,6 +79,8 @@ export interface AskResult {
   answered_by_agent?: AgentName;
   timeout?: boolean;
   error?: string;
+  async?: boolean;       // true when sent with wait:false — reply arrives as a pending message
+  message_id?: string;   // id of the sent message (async mode)
 }
 
 export interface ActivityEvent {

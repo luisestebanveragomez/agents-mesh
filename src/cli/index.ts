@@ -13,7 +13,8 @@ const [,, command, ...rest] = process.argv;
 
 async function main() {
   // Silent update check on every CLI run (non-blocking)
-  const skipUpdateCheck = ["mcp", "broker", "update"].includes(command);
+  // stop-hook must emit clean JSON on stdout — no update notices
+  const skipUpdateCheck = ["mcp", "broker", "update", "stop-hook"].includes(command);
   if (!skipUpdateCheck) checkForUpdateSilent();
 
   switch (command) {
@@ -88,6 +89,12 @@ async function main() {
       const { startBroker } = await import("../broker/server");
       startBroker();
       await new Promise(() => {});
+      break;
+    }
+
+    case "stop-hook": {
+      const { stopHookCommand } = await import("./commands/stop-hook");
+      await stopHookCommand();
       break;
     }
 
