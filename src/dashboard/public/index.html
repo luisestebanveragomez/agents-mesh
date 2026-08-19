@@ -161,6 +161,8 @@
   .peer-row:hover { border-color:var(--ink-3); border-left-color:var(--accent); }
   .peer-row.highlighted { border-color:var(--accent); }
   .peer-main { display:flex; align-items:center; gap:20px; padding:20px 26px; flex-wrap:wrap; }
+  .peer-icon { width:38px; height:38px; object-fit:contain; flex-shrink:0; }
+  .peer-icon-fallback { border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:700; }
   .peer-id-block { min-width:0; flex:1; }
   .peer-name {
     font-family:var(--disp); font-weight:700; font-size:21px; letter-spacing:-.02em;
@@ -756,6 +758,10 @@ function renderPeerCards(peers) {
       : `<div class="msg-item" style="border:none;font-style:italic">${t('noMsgs')}</div>`;
     const version = peer.agent_version !== 'unknown' ? ` ${escapeHtml(peer.agent_version)}` : '';
     const taskHtml = peer.current_task ? `<div class="peer-task">${escapeHtml(peer.current_task)}</div>` : '';
+    const color = AGENT_COLORS[peer.agent] ?? '#8a8a86';
+    const iconHtml = AGENT_ICONS[peer.agent]
+      ? `<img class="peer-icon" src="${AGENT_ICONS[peer.agent]}" alt="${escapeHtml(peer.agent)}"/>`
+      : `<div class="peer-icon peer-icon-fallback" style="background:${color}">${AGENT_LABELS[peer.agent]??'?'}</div>`;
 
     let row = container.querySelector(`.peer-row[data-peer-id="${escapeHtml(peer.id)}"]`);
     if (!row) {
@@ -765,6 +771,7 @@ function renderPeerCards(peers) {
       row.addEventListener('click', () => highlightPeer(peer.id));
       row.innerHTML = `
         <div class="peer-main">
+          ${iconHtml}
           <div class="peer-id-block">
             <div class="peer-name">
               ${escapeHtml(peer.role)}
