@@ -61,18 +61,22 @@
     text-wrap:balance;
   }
   .hero-actions {
-    position:absolute; right:56px; top:50%; transform:translateY(-50%);
+    position:sticky; top:14px; z-index:120;
     display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:flex-end;
+    width:fit-content; margin:20px 56px -68px auto;
   }
   .hero-btn {
-    background:transparent; border:1px solid var(--line); color:var(--ink-2);
+    background:var(--bg); border:1px solid var(--line); color:var(--ink-2);
     font-family:var(--mono); font-size:11px; letter-spacing:.1em; cursor:pointer;
     padding:12px 18px; display:flex; align-items:center; gap:10px;
     transition:border-color .15s, color .15s; white-space:nowrap;
   }
   .hero-btn:hover { border-color:var(--ink-2); color:var(--ink); }
-  .hero-btn .glyph { font-size:12px; line-height:1; }
+  .hero-btn svg { width:13px; height:13px; flex-shrink:0; }
+  .hero-btn .st-on { display:none; }
   .hero-btn.on { border-color:var(--accent); color:var(--accent); }
+  .hero-btn.on .st-on { display:block; }
+  .hero-btn.on .st-off { display:none; }
   .live-chip {
     background:var(--accent); color:var(--accent-ink); border:none; cursor:default;
     font-family:var(--mono); font-size:11px; letter-spacing:.1em;
@@ -228,7 +232,7 @@
     .metric { border-right:none; border-bottom:1px solid var(--line); }
     .metric:last-child { border-bottom:none; }
     .hero { padding:40px 28px; }
-    .hero-actions { position:static; transform:none; margin-top:24px; justify-content:flex-start; }
+    .hero-actions { position:static; margin:16px 28px 0 auto; justify-content:flex-end; }
     .topo,.flow,.agents { padding:22px 28px 28px; }
     .metric,.stat { padding-left:28px; padding-right:28px; }
     #asks-label { padding:16px 28px 4px; } .ask-row { padding:12px 28px; }
@@ -268,15 +272,33 @@
 <main class="shell">
 
   <!-- Hero -->
+  <div class="hero-actions">
+    <button class="hero-btn" id="theme-btn" onclick="toggleTheme()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4">
+        <rect x="1" y="1" width="12" height="12"/>
+        <path class="st-on" d="M4 7.2 L6.2 9.4 L10 4.8"/>
+      </svg>
+      <span data-i18n="darkMode"></span>
+    </button>
+    <button class="hero-btn" id="notif-btn" onclick="requestNotifications()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4">
+        <circle cx="7" cy="7" r="5.6"/>
+        <circle class="st-on" cx="7" cy="7" r="2.6" fill="currentColor" stroke="none"/>
+      </svg>
+      <span data-i18n="alerts"></span>
+    </button>
+    <button class="hero-btn" onclick="exportActivity()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4">
+        <path d="M7 1.5 V8.5 M4.2 6 L7 8.8 L9.8 6 M1.5 11 H12.5"/>
+      </svg>
+      <span data-i18n="export"></span>
+    </button>
+    <div class="live-chip"><span class="live-dot"></span><span data-i18n="live"></span></div>
+  </div>
+
   <section class="panel hero">
     <div class="label" data-i18n="eyebrow"></div>
     <h1 id="headline">&nbsp;</h1>
-    <div class="hero-actions">
-      <button class="hero-btn" id="theme-btn" onclick="toggleTheme()"><span class="glyph">☐</span><span data-i18n="darkMode"></span></button>
-      <button class="hero-btn" id="notif-btn" onclick="requestNotifications()"><span class="glyph">◯</span><span data-i18n="alerts"></span></button>
-      <button class="hero-btn" onclick="exportActivity()"><span class="glyph">☐</span><span data-i18n="export"></span></button>
-      <div class="live-chip"><span class="live-dot"></span><span data-i18n="live"></span></div>
-    </div>
   </section>
 
   <!-- Stats -->
@@ -431,11 +453,7 @@ function toggleLang(){ currentLang = currentLang==='en'?'es':'en'; localStorage.
 let currentTheme = localStorage.getItem('theme') || 'dark';
 function applyTheme(){
   document.documentElement.setAttribute('data-theme',currentTheme);
-  const btn = document.getElementById('theme-btn');
-  if (btn) {
-    btn.querySelector('.glyph').textContent = currentTheme === 'dark' ? '☑' : '☐';
-    btn.classList.toggle('on', currentTheme === 'dark');
-  }
+  document.getElementById('theme-btn')?.classList.toggle('on', currentTheme === 'dark');
   if (cy) updateGraphColors();
 }
 function toggleTheme(){ currentTheme = currentTheme==='dark'?'light':'dark'; localStorage.setItem('theme',currentTheme); applyTheme(); }
@@ -506,9 +524,7 @@ async function requestNotifications() {
   if (!('Notification' in window)) return;
   const perm = await Notification.requestPermission();
   notificationsEnabled = perm === 'granted';
-  const btn = document.getElementById('notif-btn');
-  btn.classList.toggle('on', notificationsEnabled);
-  btn.querySelector('.glyph').textContent = notificationsEnabled ? '●' : '◯';
+  document.getElementById('notif-btn').classList.toggle('on', notificationsEnabled);
 }
 function notify(title, body) {
   if (!notificationsEnabled || !initialized) return;
