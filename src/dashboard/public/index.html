@@ -75,6 +75,9 @@
   .hero-btn svg { width:14px; height:14px; flex-shrink:0; }
   .hero-btn.on { border-color:var(--accent); color:var(--accent); }
   .hero-btn.on .fill-on { fill:currentColor; }
+  #theme-btn .icon-sun { display:none; }
+  [data-theme="dark"] #theme-btn .icon-sun { display:block; }
+  [data-theme="dark"] #theme-btn .icon-moon { display:none; }
   .live-chip {
     background:var(--accent); color:var(--accent-ink); border:none; cursor:default;
     font-family:var(--mono); font-size:11px; letter-spacing:.1em;
@@ -272,10 +275,14 @@
   <!-- Hero -->
   <div class="hero-actions">
     <button class="hero-btn" id="theme-btn" onclick="toggleTheme()">
-      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-        <path class="fill-on" d="M12.2 8.6 A5.6 5.6 0 1 1 5.4 1.8 A4.5 4.5 0 0 0 12.2 8.6 Z"/>
+      <svg class="icon-moon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12.2 8.6 A5.6 5.6 0 1 1 5.4 1.8 A4.5 4.5 0 0 0 12.2 8.6 Z"/>
       </svg>
-      <span data-i18n="darkMode"></span>
+      <svg class="icon-sun" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="7" cy="7" r="2.8"/>
+        <path d="M7 0.8 V2.2 M7 11.8 V13.2 M0.8 7 H2.2 M11.8 7 H13.2 M2.6 2.6 L3.6 3.6 M10.4 10.4 L11.4 11.4 M11.4 2.6 L10.4 3.6 M3.6 10.4 L2.6 11.4"/>
+      </svg>
+      <span id="theme-label"></span>
     </button>
     <button class="hero-btn" id="notif-btn" onclick="requestNotifications()">
       <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
@@ -380,7 +387,7 @@ function escapeHtml(str) {
 const TR = {
   en: {
     eyebrow:'MESH / REAL TIME', live:'Live',
-    darkMode:'Dark mode', alerts:'Alerts', export:'Export',
+    darkMode:'Dark mode', lightMode:'Light mode', alerts:'Alerts', export:'Export',
     active:'ACTIVE', working:'WORKING', waiting:'WAITING', connections:'CONNECTIONS',
     totalMessages:'MESSAGES', lastHour:'LAST HOUR', mostActive:'MOST ACTIVE',
     topology:'TOPOLOGY', flow:'FLOW', agents:'AGENTS',
@@ -404,7 +411,7 @@ const TR = {
   },
   es: {
     eyebrow:'MALLA / TIEMPO REAL', live:'En vivo',
-    darkMode:'Modo oscuro', alerts:'Alertas', export:'Exportar',
+    darkMode:'Modo oscuro', lightMode:'Modo claro', alerts:'Alertas', export:'Exportar',
     active:'ACTIVOS', working:'TRABAJANDO', waiting:'EN ESPERA', connections:'CONEXIONES',
     totalMessages:'MENSAJES', lastHour:'ÚLTIMA HORA', mostActive:'MÁS ACTIVO',
     topology:'TOPOLOGÍA', flow:'FLUJO', agents:'AGENTES',
@@ -440,6 +447,7 @@ function applyI18n() {
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.getElementById('search').placeholder = t('searchPlaceholder');
   document.getElementById('rail-lang').textContent = currentLang.toUpperCase();
+  updateThemeLabel();
   document.documentElement.lang = currentLang;
   updateHeadline();
   if (lastPeers.length) renderPeerCards(lastPeers);
@@ -452,7 +460,12 @@ let currentTheme = localStorage.getItem('theme') || 'dark';
 function applyTheme(){
   document.documentElement.setAttribute('data-theme',currentTheme);
   document.getElementById('theme-btn')?.classList.toggle('on', currentTheme === 'dark');
+  updateThemeLabel();
   if (cy) updateGraphColors();
+}
+function updateThemeLabel(){
+  const el = document.getElementById('theme-label');
+  if (el) el.textContent = t(currentTheme === 'dark' ? 'lightMode' : 'darkMode');
 }
 function toggleTheme(){ currentTheme = currentTheme==='dark'?'light':'dark'; localStorage.setItem('theme',currentTheme); applyTheme(); }
 function gColors() {
